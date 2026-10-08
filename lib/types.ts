@@ -18,6 +18,7 @@ export interface PenaltyType {
   teamId: string;
   name: string;
   description: string;
+  aliases: string[];
   amountCents: number;
   active: boolean;
 }
@@ -32,6 +33,9 @@ export interface Penalty {
   status: PenaltyStatus;
   createdAt: string;
   correctionNote?: string;
+  source?: "manual" | "whatsapp";
+  sourceHash?: string;
+  evidenceExcerpt?: string;
 }
 export interface Transaction {
   id: string;

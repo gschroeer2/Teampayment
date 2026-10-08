@@ -31,6 +31,14 @@ export const commandSchema = z.discriminatedUnion("type", [
     status: z.enum(["proposed", "confirmed"]),
   }),
   z.object({
+    type: z.literal("addWhatsAppProposal"),
+    playerId: id,
+    typeId: id,
+    date: dateSchema,
+    messageKey: z.string().regex(/^[a-f0-9]{64}$/),
+    excerpt: z.string().trim().min(1).max(1000),
+  }),
+  z.object({
     type: z.literal("setPenaltyStatus"),
     id,
     status: z.enum(["confirmed", "rejected", "cancelled"]),
@@ -59,6 +67,7 @@ export const commandSchema = z.discriminatedUnion("type", [
     id: id.optional(),
     name,
     description: z.string().trim().max(500),
+    aliases: z.array(z.string().trim().min(2).max(100)).max(30).default([]),
     amountCents: amount,
     active: z.boolean(),
   }),
@@ -78,7 +87,7 @@ export const commandSchema = z.discriminatedUnion("type", [
     playerId: id.nullable(),
   }),
 ]);
-export type Command = z.infer<typeof commandSchema>;
+export type Command = z.input<typeof commandSchema>;
 export function canManage(role: string) {
   return role === "cashier" || role === "admin";
 }

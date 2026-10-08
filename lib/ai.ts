@@ -10,7 +10,12 @@ export interface PenaltyAnalysisProvider {
   analyze(input: {
     excerpt: string;
     players: Array<{ id: string; names: string[] }>;
-    catalog: Array<{ id: string; name: string; amountCents: number }>;
+    catalog: Array<{
+      id: string;
+      name: string;
+      aliases: string[];
+      amountCents: number;
+    }>;
   }): Promise<z.infer<typeof suggestionSchema>>;
 }
 export function validateSuggestion(

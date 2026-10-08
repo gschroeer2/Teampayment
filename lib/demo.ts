@@ -31,12 +31,24 @@ export function createDemo(): AppState {
     ["Schuhe vergessen", 500, "Ausrüstung nicht vollständig."],
     ["Gelbe Karte wegen Meckerns", 1000, "Fairplay auf und neben dem Platz."],
     ["Kabine nicht aufgeräumt", 300, "Wir hinterlassen die Kabine sauber."],
+    [
+      "Kronkorken fallen lassen",
+      200,
+      "Fiktiver Demo-Betrag – im Katalog anpassbar.",
+    ],
   ].map(([name, amount, description], i) => ({
     id: uid(100 + i),
     teamId,
     name: String(name),
     amountCents: Number(amount),
     description: String(description),
+    aliases: [
+      ["zu spät", "verspätet"],
+      ["Schuhe vergessen", "Schuhe nicht dabei"],
+      ["Meckern"],
+      ["Kabine dreckig"],
+      ["Deckel", "Kronkorken", "Bierdeckel"],
+    ][i],
     active: true,
   }));
   const penalties = [

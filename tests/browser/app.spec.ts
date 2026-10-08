@@ -207,3 +207,122 @@ test("Katalogpflege und bestätigte Anonymisierung erhalten die Finanzhistorie",
     page.getByText("Verwendungszweck anonymisiert", { exact: true }),
   ).toBeVisible();
 });
+
+test("WhatsApp-Kurzmeldung nutzt Katalogbetrag, benötigt Freigabe und verhindert erneuten Import", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await nav(page, "Verwaltung").click();
+  await page
+    .getByRole("button", { name: "Kronkorken fallen lassen bearbeiten" })
+    .click();
+  await page.getByLabel("Betrag in Euro").fill("3,50");
+  await page
+    .getByLabel("Erkennungsbegriffe (kommagetrennt)")
+    .fill("Deckel, Kronkorken, Bierdeckel");
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Speichern", exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await nav(page, "Importe").click();
+  const file = {
+    name: "chat.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("08.10.26, 19:30 - Trainer: Jo Deckel"),
+  };
+  await page.getByLabel("WhatsApp-TXT auswählen").setInputFiles(file);
+  await expect(
+    page.getByText("Eindeutiger Vorschlag", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Spieler für Vorschlag")).toHaveValue(
+    "20000000-0000-4000-8000-000000000001",
+  );
+  await expect(page.getByText(/Katalogbetrag: 3,50/)).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth > window.innerWidth,
+    ),
+  ).toBe(false);
+  await page.getByRole("button", { name: "Als Vorschlag übernehmen" }).click();
+  await expect(
+    page.getByText("Alle angezeigten Vorschläge wurden übernommen."),
+  ).toBeVisible();
+  await page.reload();
+  await nav(page, "Importe").click();
+  await page.getByLabel("WhatsApp-TXT auswählen").setInputFiles({
+    ...file,
+    buffer: Buffer.from("[08.10.2026, 19:30:00] Trainer: Jo Deckel"),
+  });
+  await expect(
+    page.getByText(/Keine neuen möglichen Strafmeldungen/),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Als Vorschlag übernehmen" }),
+  ).toHaveCount(0);
+  await nav(page, "Strafen").click();
+  const row = page
+    .getByRole("row")
+    .filter({ hasText: "Kronkorken fallen lassen" });
+  await expect(row).toHaveCount(1);
+  await expect(row).toContainText("3,50");
+  await expect(row).toContainText("Vorschlag");
+  await row.getByRole("button", { name: "Strafe bestätigen" }).click();
+  await expect(page.getByRole("dialog")).toContainText(
+    "WhatsApp-Beleg: Jo Deckel",
+  );
+  await page
+    .getByLabel("Begründung / Vermerk")
+    .fill("Beleg und Katalog geprüft");
+  await page.getByRole("button", { name: "Bestätigen", exact: true }).click();
+  await expect(row).toContainText("Offen");
+});
+
+test("WhatsApp-Import weist ungültige Dateien zurück und lässt unklare Spieler prüfen", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await nav(page, "Importe").click();
+  const input = page.getByLabel("WhatsApp-TXT auswählen");
+  await input.setInputFiles({
+    name: "chat.zip",
+    mimeType: "application/zip",
+    buffer: Buffer.from("bad"),
+  });
+  await expect(
+    page.getByRole("alert").filter({ hasText: "Bitte einen WhatsApp" }),
+  ).toContainText("TXT");
+  await input.setInputFiles({
+    name: "chat.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.alloc(2_000_001),
+  });
+  await expect(
+    page.getByRole("alert").filter({ hasText: "2 MB" }),
+  ).toContainText("2 MB");
+  await input.setInputFiles({
+    name: "chat.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("08.10.26, 19:30 - Trainer: Jo und Leo Deckel?"),
+  });
+  await expect(
+    page.getByText("Zuordnung prüfen", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Mehrere Spieler passen zur Nachricht."),
+  ).toBeVisible();
+  await expect(page.getByLabel("Spieler für Vorschlag")).toHaveValue("");
+  await expect(
+    page.getByRole("button", { name: "Als Vorschlag übernehmen" }),
+  ).toBeDisabled();
+  await page
+    .getByLabel("Spieler für Vorschlag")
+    .selectOption({ label: "Jonas Weber · MK-001" });
+  await expect(
+    page.getByRole("button", { name: "Als Vorschlag übernehmen" }),
+  ).toBeEnabled();
+  await page.getByRole("button", { name: "Vorschau verwerfen" }).click();
+  await expect(
+    page.getByRole("button", { name: "Als Vorschlag übernehmen" }),
+  ).toHaveCount(0);
+});

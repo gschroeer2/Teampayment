@@ -2052,3 +2052,64 @@ textarea {
     scroll-behavior: auto !important;
   }
 }
+
+/* Local WhatsApp review: readable evidence and stacked inputs on small screens. */
+.whatsapp-panel {
+  margin-bottom: 24px;
+}
+.whatsapp-panel > p {
+  margin-bottom: 16px;
+}
+.whatsapp-upload {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 20px 0;
+}
+.whatsapp-upload input {
+  max-width: 100%;
+}
+.whatsapp-candidate {
+  padding: 20px 0;
+  border-top: 1px solid var(--border);
+}
+.whatsapp-candidate blockquote,
+.whatsapp-evidence {
+  margin: 12px 0;
+  padding: 12px;
+  border-left: 3px solid var(--green);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.whatsapp-candidate ul {
+  padding-left: 20px;
+  margin-bottom: 16px;
+}
+.whatsapp-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.whatsapp-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.whatsapp-fields select {
+  width: 100%;
+  min-width: 0;
+}
+.whatsapp-save {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 16px 0;
+}
+@media (max-width: 640px) {
+  .whatsapp-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -136,6 +136,32 @@ export function applyCommand(
       summary = `Strafe für ${player.code}: ${euros(command.amountCents)}`;
       break;
     }
+    case "addWhatsAppProposal": {
+      const player = getPlayer(command.playerId);
+      const category = state.penaltyTypes.find(
+        (t) => t.id === command.typeId && t.teamId === teamId && t.active,
+      );
+      if (!player.active || !category)
+        throw new Error("Spieler oder Kategorie ist nicht aktiv.");
+      if (state.penalties.some((p) => p.sourceHash === command.messageKey))
+        throw new Error("Nachricht wurde bereits übernommen.");
+      state.penalties.push({
+        id: uuid(),
+        teamId,
+        playerId: player.id,
+        typeId: category.id,
+        amountCents: category.amountCents,
+        reason: category.name,
+        date: command.date,
+        status: "proposed",
+        source: "whatsapp",
+        sourceHash: command.messageKey,
+        evidenceExcerpt: command.excerpt,
+        createdAt: now,
+      });
+      summary = `WhatsApp-Vorschlag für ${player.code}: ${category.name}`;
+      break;
+    }
     case "setPenaltyStatus": {
       const p = state.penalties.find((p) => p.id === command.id);
       if (!p) throw new Error("Strafe nicht gefunden.");
@@ -275,6 +301,7 @@ export function applyCommand(
         teamId,
         name: command.name,
         description: command.description,
+        aliases: command.aliases,
         amountCents: command.amountCents,
         active: command.active,
       };
@@ -294,6 +321,7 @@ export function applyCommand(
       )) {
         penalty.reason = "Grund anonymisiert";
         delete penalty.correctionNote;
+        delete penalty.evidenceExcerpt;
       }
       const transactions = new Set(
         state.allocations
@@ -420,7 +448,9 @@ export function visibleState(
     role,
     playerId,
     players: state.players.filter((p) => p.id === playerId),
-    penalties: state.penalties.filter((p) => p.playerId === playerId),
+    penalties: state.penalties
+      .filter((p) => p.playerId === playerId)
+      .map((p) => ({ ...p, evidenceExcerpt: undefined })),
     allocations,
     auditLogs: [],
     memberships: [],

@@ -45,6 +45,15 @@ try {
     ),
   );
   await db.exec(
+    await readFile(
+      new URL(
+        "../supabase/migrations/002_whatsapp_catalog_aliases.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  );
+  await db.exec(
     await readFile(new URL("../supabase/seed.sql", import.meta.url), "utf8"),
   );
   await db.exec(
@@ -374,6 +383,90 @@ try {
         ),
         0,
       );
+    },
+  );
+  await check(
+    "WhatsApp catalog aliases are admin-only and validated in the database",
+    async () => {
+      const data = {
+        type: "savePenaltyType",
+        id: "20000000-0000-4000-8000-000000000104",
+        name: "Kronkorken fallen lassen",
+        description: "Fiktiver Testbetrag",
+        amountCents: 350,
+        aliases: ["Deckel", "Kronkorken"],
+        active: true,
+      };
+      await assert.rejects(command(ids.cashier, data));
+      await assert.rejects(command(ids.admin, { ...data, aliases: ["x"] }));
+      await command(ids.admin, data);
+      const row = (
+        await as(ids.admin, "select * from public.penalty_types where id=$1", [
+          data.id,
+        ])
+      ).rows[0];
+      assert.deepEqual(row.aliases, data.aliases);
+    },
+  );
+  await check(
+    "WhatsApp proposals ignore forged amounts/status and enforce team access and duplicate hashes",
+    async () => {
+      const data = {
+        type: "addWhatsAppProposal",
+        playerId: ids.p1,
+        typeId: "20000000-0000-4000-8000-000000000104",
+        date: "2026-10-08",
+        messageKey: "a".repeat(64),
+        excerpt: "Jo Deckel",
+        amountCents: 1,
+        status: "confirmed",
+      };
+      await assert.rejects(command(ids.player, data));
+      await assert.rejects(command(ids.outsider, data));
+      await assert.rejects(
+        command(ids.cashier, { ...data, playerId: ids.foreign }),
+      );
+      await assert.rejects(
+        command(ids.cashier, { ...data, messageKey: "bad" }),
+      );
+      await command(ids.cashier, data);
+      await assert.rejects(command(ids.cashier, data));
+      const rows = (
+        await as(
+          ids.admin,
+          "select * from public.penalties where source_hash=$1",
+          [data.messageKey],
+        )
+      ).rows;
+      assert.equal(rows.length, 1);
+      assert.equal(rows[0].status, "proposed");
+      assert.equal(rows[0].amount_cents, 350);
+      assert.equal(rows[0].source, "whatsapp");
+      const audit = (
+        await as(
+          ids.admin,
+          "select after_data from public.audit_logs where entity_id=$1",
+          [rows[0].id],
+        )
+      ).rows;
+      assert.ok(
+        audit.every((r) => !JSON.stringify(r.after_data).includes("Jo Deckel")),
+      );
+      const snapshot = (
+        await as(ids.cashier, "select public.teamkasse_state($1) as state", [
+          ids.team,
+        ])
+      ).rows[0].state;
+      assert.equal(
+        snapshot.penalties.find((p) => p.id === rows[0].id).evidence_excerpt,
+        "Jo Deckel",
+      );
+      const own = (
+        await as(ids.player, "select public.teamkasse_state($1) as state", [
+          ids.team,
+        ])
+      ).rows[0].state;
+      assert.ok(own.penalties.every((p) => !("evidence_excerpt" in p)));
     },
   );
   await check(

@@ -72,6 +72,7 @@ export async function loadState(): Promise<AppState> {
       teamId: p.team_id,
       name: p.name,
       description: p.description,
+      aliases: p.aliases ?? [],
       amountCents: p.amount_cents,
       active: p.active,
     })),
@@ -86,6 +87,9 @@ export async function loadState(): Promise<AppState> {
       status: p.status,
       createdAt: p.created_at,
       correctionNote: p.correction_note ?? undefined,
+      source: p.source,
+      sourceHash: p.source_hash ?? undefined,
+      evidenceExcerpt: p.evidence_excerpt ?? undefined,
     })),
     transactions: (transactions.data ?? []).map(
       (t: Record<string, unknown>) => ({

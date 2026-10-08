@@ -31,6 +31,7 @@ export const demoStorageSchema = z.object({
         teamId: id,
         name: z.string(),
         description: z.string(),
+        aliases: z.array(z.string()).default([]),
         amountCents: cent.positive(),
         active: z.boolean(),
       }),
@@ -47,6 +48,12 @@ export const demoStorageSchema = z.object({
         status: z.enum(["proposed", "confirmed", "rejected", "cancelled"]),
         createdAt: z.string(),
         correctionNote: z.string().optional(),
+        source: z.enum(["manual", "whatsapp"]).optional(),
+        sourceHash: z
+          .string()
+          .regex(/^[a-f0-9]{64}$/)
+          .optional(),
+        evidenceExcerpt: z.string().max(1000).optional(),
       }),
     ),
     transactions: z.array(

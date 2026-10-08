@@ -44,6 +44,7 @@ import { createDemo } from "@/lib/demo";
 import { makeCsv, downloadFile } from "@/lib/csv";
 import Link from "next/link";
 import { signOut } from "@/app/login/actions";
+import { WhatsAppImport } from "./whatsapp-import";
 import { demoStorageSchema } from "@/lib/storage";
 
 type Tab =
@@ -1021,16 +1022,20 @@ export default function TeamKasse({
               <div className="info-card">
                 <CircleHelp size={22} />
                 <div>
-                  <strong>
-                    Für den nächsten Entwicklungsschritt vorbereitet
-                  </strong>
+                  <strong>WhatsApp-TXT-Import verfügbar</strong>
                   <p>
-                    In dieser Version werden Zahlungen und Strafen manuell
-                    erfasst. Dateiimporte und KI-Verarbeitung sind noch nicht
-                    freigeschaltet.
+                    WhatsApp-Strafmeldungen werden anhand des Strafenkatalogs
+                    vorgeschlagen. Zahlungsimporte und KI-Verarbeitung folgen in
+                    einem späteren Entwicklungsschritt.
                   </p>
                 </div>
               </div>
+              <WhatsAppImport
+                state={state}
+                busy={busy}
+                error={error}
+                onSubmit={execute}
+              />
               <div className="import-grid">
                 {[
                   {
@@ -1042,11 +1047,6 @@ export default function TeamKasse({
                     title: "Bankumsätze",
                     text: "Konfigurierbare CSV-Formate. CAMT.053 und regulierte PSD2-Anbieter folgen separat.",
                     tag: "CSV · später CAMT.053",
-                  },
-                  {
-                    title: "WhatsApp-Strafenvorschläge",
-                    text: "Chat-Exporte statt Scraper. Nur relevante Ausschnitte und menschliche Bestätigung.",
-                    tag: "TXT · später ZIP",
                   },
                 ].map((item) => (
                   <section className="panel import-card" key={item.title}>
@@ -1098,6 +1098,9 @@ export default function TeamKasse({
                       <div>
                         <strong>{t.name}</strong>
                         <p>{t.description}</p>
+                        {t.aliases.length > 0 && (
+                          <p>Erkennungsbegriffe: {t.aliases.join(", ")}</p>
+                        )}
                         <span
                           className={`badge ${t.active ? "green" : "gray"}`}
                         >
@@ -1454,6 +1457,10 @@ function EntryDialog({
             ...(category ? { id: category.id } : {}),
             name: str("name"),
             description: str("description"),
+            aliases: str("categoryAliases")
+              .split(",")
+              .map((a) => a.trim())
+              .filter(Boolean),
             amountCents: parseEuros(str("amount")),
             active: f.get("active") === "on",
           };
@@ -1796,6 +1803,11 @@ function EntryDialog({
                 }
               </span>
             </div>
+            {modal.penalty.evidenceExcerpt && (
+              <blockquote className="whatsapp-evidence">
+                WhatsApp-Beleg: {modal.penalty.evidenceExcerpt}
+              </blockquote>
+            )}
             <p>
               {modal.status === "confirmed"
                 ? "Mit der Bestätigung wird die Strafe verbindlich."
@@ -1861,6 +1873,19 @@ function EntryDialog({
                 }
               />
             </label>
+            <label>
+              Erkennungsbegriffe (kommagetrennt)
+              <input
+                name="categoryAliases"
+                defaultValue={category?.aliases.join(", ")}
+                maxLength={3029}
+                placeholder="z. B. Deckel, Kronkorken, Bierdeckel"
+              />
+            </label>
+            <p className="form-hint">
+              Kurzformen und Synonyme für den WhatsApp-Import. Eindeutige
+              Begriffe verwenden; keine automatische KI-Erkennung.
+            </p>
             <label>
               Beschreibung
               <textarea
@@ -2038,6 +2063,9 @@ function PenaltyRows({
                     <span>
                       <strong>{player?.name ?? "Unbekannt"}</strong>
                       <small>{p.reason}</small>
+                      {p.source === "whatsapp" && (
+                        <small>Quelle: WhatsApp</small>
+                      )}
                       {p.correctionNote && (
                         <small>Vermerk: {p.correctionNote}</small>
                       )}

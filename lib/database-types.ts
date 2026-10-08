@@ -15,6 +15,7 @@ export interface DatabaseSnapshot {
     team_id: string;
     name: string;
     description: string;
+    aliases: string[];
     amount_cents: number;
     active: boolean;
   }>;
@@ -29,6 +30,9 @@ export interface DatabaseSnapshot {
     status: PenaltyStatus;
     created_at: string;
     correction_note: string | null;
+    source: "manual" | "whatsapp";
+    source_hash: string | null;
+    evidence_excerpt?: string | null;
   }>;
   transactions: Array<{
     id: string;

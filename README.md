@@ -6,7 +6,8 @@ Eine deutsche, mobile Mannschaftskasse für Amateur-Fußballteams. Erste funktio
 
 - Dashboard mit offenen Forderungen, beglichenen Beträgen, Guthaben und aktuellen Vorgängen.
 - Spieler hinzufügen, bearbeiten und deaktivieren; eindeutige IDs (`MK-017`), Spitznamen und Namensvarianten.
-- Strafenkatalog mit Centbeträgen, aktivierbaren Kategorien und Administration.
+- Strafenkatalog mit Centbeträgen, aktivierbaren Kategorien und bearbeitbaren Erkennungsbegriffen.
+- WhatsApp-TXT-Import mit Katalogzuordnung, prüfbaren Vorschlägen und gespeicherten Nachrichten-Hashes gegen Dubletten.
 - Manuelle Strafen: Vorschlag, Bestätigung, Ablehnung und Storno mit Prüfvermerk. Korrekturen durch Storno und neuen Eintrag, ohne Überschreiben der Historie.
 - Zahlungen über Barzahlung, Bank oder PayPal **manuell** erfassen. Teilzahlungen, Aufteilung auf mehrere Spieler, automatische Verteilung auf die ältesten bestätigten Forderungen, Guthaben und vollständige Rückbuchung.
 - CSV-Export, Spieler-/Zeitraumfilter für Vorgänge. Kontostände berücksichtigen immer die gesamte Historie.
@@ -49,7 +50,7 @@ Die PWA wird im Produktionsmodus registriert. Auf dem iPhone über „Teilen →
 
 ## Supabase einrichten
 
-1. Ein Supabase-Projekt erstellen. In dessen SQL-Editor den vollständigen Inhalt von [`supabase/migrations/001_teamkasse.sql`](supabase/migrations/001_teamkasse.sql) ausführen. Diese initiale Migration ist einmalig; zukünftige Änderungen als neue Migrationen ergänzen.
+1. Ein Supabase-Projekt erstellen. In dessen SQL-Editor den vollständigen Inhalt von [`supabase/migrations/001_teamkasse.sql`](supabase/migrations/001_teamkasse.sql) ausführen. Anschließend [`supabase/migrations/002_whatsapp_catalog_aliases.sql`](supabase/migrations/002_whatsapp_catalog_aliases.sql) ausführen. Beide Migrationen sind einmalig; bei einer bestehenden Version-1-Datenbank nur Migration 002 ergänzen.
 2. Für eine **Entwicklungsdatenbank** optional [`supabase/seed.sql`](supabase/seed.sql) ausführen. Die Beispieldaten sind fiktiv, und der Seed ist wiederholbar. In einer produktiven Datenbank zunächst ein eigenes Team als Datenbankbetreiber anlegen:
 
    ```sql
@@ -145,19 +146,31 @@ Prüfergebnisse und behobene Fehler stehen in [`docs/VALIDATION.md`](docs/VALIDA
 - Datenexporte umfassen nur die für die aktuelle Rolle berechtigten Daten. CSV-Zellen werden gegen Tabellenkalkulations-Formeln abgesichert.
 - Unter „Spieler“ kann ein Admin ein Konto nach expliziter Texteingabe anonymisieren. Name, Aliasse, Strafgründe, zugehörige Verwendungszwecke und **alle Freitext-Snapshots des Teamprotokolls** werden entfernt; die strukturierte Änderungshistorie bleibt. Spielerzugriff wird entzogen. UUIDs, Spieler-ID, externe Transaktions-IDs und Geldhistorie bleiben zur Nachvollziehbarkeit bestehen. Dies ist Pseudonymisierung/Redaktion, keine vollständige Löschung sämtlicher Daten.
 - Der Betreiber muss anschließend bei Bedarf das betreffende Supabase-Auth-Konto, Auth-Logs, Exporte und Backups behandeln. Gesetzlich oder vereinsrechtlich notwendige Finanzaufbewahrung muss vor Löschung geklärt werden. Es gibt keine pauschale automatische Löschung der Finanzhistorie.
-- Die einstellbare Frist (30–3650 Tage) gilt für importierte Nachrichtenbelege. `purge_expired_import_evidence()` entfernt abgelaufene Belegausschnitte; sie muss über eine vertrauenswürdige tägliche Datenbankaufgabe aufgerufen werden. Sie ist nicht für App-Clients freigegeben. Belegtexte werden grundsätzlich nicht in Audit-Snapshots kopiert. Der aktuelle Stand importiert noch keine solchen Belege.
+- Die einstellbare Frist (30–3650 Tage) gilt für importierte Nachrichtenbelege. `purge_expired_import_evidence()` entfernt abgelaufene Belegausschnitte; sie muss über eine vertrauenswürdige tägliche Datenbankaufgabe aufgerufen werden. Sie ist nicht für App-Clients freigegeben. Belegtexte werden grundsätzlich nicht in Audit-Snapshots kopiert. WhatsApp-Belege werden beim Übernehmen einzelner Vorschläge gespeichert. Vollständige Chats werden weder hochgeladen noch dauerhaft gespeichert.
+
+## WhatsApp-Kurzmeldungen ausprobieren
+
+1. Unter **Verwaltung** die Kategorie **Kronkorken fallen lassen** bearbeiten. Dort den vereinbarten Betrag sowie kommagetrennte Erkennungsbegriffe wie `Deckel, Kronkorken, Bierdeckel` hinterlegen. Der neue Demo-Katalog enthält hierfür einen rein fiktiven Betrag von 2 Euro; er ist keine Vorgabe für euer Team. Bei bereits gespeicherten älteren Demo-Daten die Kategorie selbst ergänzen oder bewusst die Demo zurücksetzen.
+2. Unter **Spieler** muss `Jo` als Spitzname genau einem aktiven Spieler zugeordnet sein; im neuen Demo-Datensatz ist das Jonas Weber.
+3. Unter **Importe** einen Android-/iPhone-Chat-Export als UTF-8-TXT ohne Medien auswählen (maximal 2 MB). Für einen lokalen Test reicht diese fiktive TXT-Zeile: `08.10.26, 19:30 - Trainer: Jo Deckel`.
+4. Die Vorschau zeigt Jonas, die Kategorie und deren hinterlegten Betrag. Spieler und Kategorie können vor der Übernahme korrigiert werden. **Als Vorschlag übernehmen** speichert den Belegausschnitt und Nachrichten-Hash. Unter **Strafen** den Vorschlag anschließend bestätigen oder ablehnen. Erst die Bestätigung erzeugt eine Forderung.
+5. Derselbe Export wird nach Übernahme nicht nochmals vorgeschlagen – auch nach Neuladen sowie nach Ablehnung oder Storno. Dublettenschutz gilt pro Team und Nachrichten-Hash (Datum, Uhrzeit, Absender und Originaltext). Eine nachträglich veränderte Nachricht oder ein geänderter Absender ist kein identischer Export und muss manuell geprüft werden.
+
+Die Erkennung gleicht ganze normalisierte Wörter/Phrasen mit Kategoriebezeichnungen und konfigurierten Erkennungsbegriffen ab. Groß-/Kleinschreibung, Umlaute und Satzzeichen sind tolerant. Unbekannte Umschreibungen und Tippfehler werden nicht frei erraten: passende Synonyme im Katalog ergänzen. Es gibt keine aktive KI-Anbindung und keinen API-Schlüsselbedarf. Mehrere mögliche Spieler/Kategorien, abweichende Geldbeträge, Verneinungen und mögliche Ironie werden zur Prüfung markiert. Der Nachrichtenabsender wird nicht automatisch als bestrafter Spieler angenommen. Jede Übernahme verwendet den aktuellen Katalogbetrag; abweichende Sonderbeträge können weiterhin als begründete manuelle Strafe erfasst werden.
+
+Vorschauen werden beim Verlassen des Importbereichs verworfen; nur übernommene Ausschnitte bleiben gespeichert. Maximal 500 Vorschläge werden pro Vorschau angezeigt; größere Exporte bitte aufteilen. ZIP, automatische verbindliche Forderungen und ein gesondertes Datei-Importprotokoll sind noch nicht implementiert. Übernahmen, Freigaben und Ablehnungen stehen im Änderungsprotokoll. In Supabase sind Belege in der App nur für Kassierer und Admin sichtbar; Audit-Snapshots enthalten keine Belegtexte. Die konfigurierbare Löschfrist greift über die dokumentierte Datenbankaufgabe. In der Demo gibt es keine Hintergrundaufgabe: zum Entfernen der lokalen Daten die Demo zurücksetzen.
 
 ## Nächste Entwicklungsphasen
 
 | Bereich            | Stand in Version 1                                                                                           | Nächster überprüfbarer Schritt                                                                    |
 | ------------------ | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
 | PayPal-/Bank-CSV   | Getestete, reine Vorschauparser mit Mapping, EUR-Prüfung, ID-Dubletten und eindeutiger Spieleridentifikation | Upload, relevante Zeilen auswählen, Prüfmaske, atomare Import-RPC und Importprotokoll             |
-| WhatsApp           | Getesteter deutscher Android-/iPhone-TXT-Parser mit Mehrzeilenbehandlung und Nachrichten-Hashes              | Sichere Upload-Prüfung, ZIP ohne Medien, Vorschlagsfreigabe und Hash-Persistenz                   |
+| WhatsApp           | TXT-Import im Browser, Katalogsynonyme, Vorschlagsprüfung, persistente Dublettensperre und Belege            | ZIP ohne Medien, Importübersicht und optionaler KI-Adapter                                        |
 | KI                 | Provider-Vertrag und Prüfung bekannter Spieler/Beträge; keine API-Aufrufe                                    | Server-only OpenAI-Adapter mit strukturierten Ausgaben, Minimal-Ausschnitten, Limits und Freigabe |
 | Bank/PSD2          | Schnittstelle für regulierten Kontoinformationsanbieter                                                      | Anbieter auswählen; Consent-Flow; CAMT.053-Parser und Transferabgleich                            |
 | Weitere Funktionen | Eine Mannschaft pro Ansicht, vollständige Rückbuchung                                                        | Teamwechsel, Teilrückerstattungen und Teilen einzelner Nachrichten                                |
 
-`lib/imports/` und `lib/ai.ts` sind vorbereitende Module, keine produktiven Integrationen. Sie schreiben keine Strafen oder Zahlungen in die Datenbank. CSV-Vorschauen fordern immer manuelle Freigabe; Namen werden nur bei genau einem Treffer zugeordnet. Der KI-Vertrag erlaubt ausschließlich Vorschläge und benötigt keine API-Schlüssel für den aktuellen Betrieb. Ein späterer OpenAI-Schlüssel gehört ausschließlich in serverseitige Umgebungsvariablen. Niemals private PayPal-Zugangsdaten, Online-Banking-Passwörter oder WhatsApp-Web-Scraper ergänzen.
+Die CSV-Parser in `lib/imports/csv.ts` und der KI-Vertrag in `lib/ai.ts` sind vorbereitende Module. Der WhatsApp-TXT-Import ist integriert und speichert ausschließlich manuell übernommene Strafenvorschläge. CSV-Vorschauen fordern immer manuelle Freigabe; Namen werden nur bei genau einem Treffer zugeordnet. Der KI-Vertrag erlaubt ausschließlich Vorschläge und benötigt keine API-Schlüssel für den aktuellen Betrieb. Ein späterer OpenAI-Schlüssel gehört ausschließlich in serverseitige Umgebungsvariablen. Niemals private PayPal-Zugangsdaten, Online-Banking-Passwörter oder WhatsApp-Web-Scraper ergänzen.
 
 Für weitere Entwicklung: zunächst einen kleinen Ablauf samt Fachlogiktest ergänzen, anschließend eine neue SQL-Migration und RLS-/RPC-Tests, danach Serverroute und Oberfläche. Die gemeinsame TypeScript-Kontologik und SQL-Logik müssen im Verhalten übereinstimmen. Den Lockfile einchecken und vor Freigaben alle Prüfungen ausführen.
 
@@ -169,7 +182,7 @@ components/             Oberfläche und PWA-Registrierung
 lib/ledger.ts           Kontologik und lokale Demo-Befehle
 lib/commands.ts         Zod-Eingaben und Rollenprüfung
 lib/server-state.ts     Authentifizierter Datenbank-Snapshot
-lib/imports/            Reine Parser für spätere Importvorschauen
+lib/imports/            CSV-Vorschauparser und WhatsApp-Katalogerkennung
 supabase/migrations/    Tabellen, RLS, RPCs und Audit-Trigger
 supabase/seed.sql        Wiederholbare fiktive Beispieldaten
 scripts/test-db.mjs      PostgreSQL-Integrationstests
