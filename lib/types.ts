@@ -33,7 +33,7 @@ export interface Penalty {
   status: PenaltyStatus;
   createdAt: string;
   correctionNote?: string;
-  source?: "manual" | "whatsapp";
+  source?: "manual" | "whatsapp" | "drinks";
   sourceHash?: string;
   evidenceExcerpt?: string;
 }
@@ -70,6 +70,20 @@ export interface Membership {
   role: Role;
   playerId: string | null;
 }
+export interface DrinkConsumption {
+  id: string;
+  playerId: string;
+  date: string;
+  listKey: string;
+  count: number;
+  unitPriceCents: number;
+  penaltyId: string;
+  imageHash: string | null;
+}
+export interface ImportRecord {
+  source: string;
+  hash: string;
+}
 export interface AppState {
   mode: "demo" | "supabase";
   team: Team;
@@ -82,4 +96,6 @@ export interface AppState {
   allocations: Allocation[];
   auditLogs: AuditLog[];
   memberships: Membership[];
+  drinkConsumptions: DrinkConsumption[];
+  imports: ImportRecord[];
 }

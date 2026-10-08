@@ -91,7 +91,7 @@ export function applyCommand(
 ): AppState {
   const command = commandSchema.parse(input);
   authorize(current.role, command);
-  const state = structuredClone(current);
+  let state = structuredClone(current);
   const teamId = state.team.id;
   const getPlayer = (id: string) => {
     const p = state.players.find((p) => p.id === id && p.teamId === teamId);
@@ -100,6 +100,70 @@ export function applyCommand(
   };
   let summary = "";
   switch (command.type) {
+    case "importPenaltyCatalog": {
+      if (
+        state.imports.some(
+          (r) => r.source === "catalog" && r.hash === command.fileHash,
+        )
+      )
+        throw new Error("Katalogdatei wurde bereits importiert.");
+      const names = new Set<string>();
+      for (const row of command.rows) {
+        const key = row.name.trim().toLocaleLowerCase("de-DE");
+        if (names.has(key)) throw new Error("Doppelte Kategorien im Import.");
+        names.add(key);
+        state = applyCommand(
+          state,
+          { type: "savePenaltyType", ...row },
+          uuid,
+          now,
+        );
+      }
+      state.imports.push({ source: "catalog", hash: command.fileHash });
+      summary = `Strafenkatalog importiert: ${command.rows.length} Kategorien`;
+      break;
+    }
+    case "recordDrinks": {
+      for (const cell of command.cells) {
+        const player = getPlayer(cell.playerId);
+        if (!player.active) throw new Error("Teammitglied ist deaktiviert.");
+        if (
+          state.drinkConsumptions.some(
+            (r) =>
+              r.playerId === cell.playerId &&
+              r.date === cell.date &&
+              (r.listKey === command.listKey ||
+                (!!command.imageHash && r.imageHash === command.imageHash)),
+          )
+        )
+          throw new Error("Getränkezelle wurde bereits übernommen.");
+        const penaltyId = uuid();
+        state.penalties.push({
+          id: penaltyId,
+          teamId,
+          playerId: player.id,
+          typeId: null,
+          amountCents: cell.count * command.unitPriceCents,
+          reason: `Getränke: ${cell.count} × ${euros(command.unitPriceCents)}`,
+          date: cell.date,
+          status: "confirmed",
+          source: "drinks",
+          createdAt: now,
+        });
+        state.drinkConsumptions.push({
+          id: uuid(),
+          playerId: player.id,
+          date: cell.date,
+          listKey: command.listKey,
+          count: cell.count,
+          unitPriceCents: command.unitPriceCents,
+          penaltyId,
+          imageHash: command.imageHash,
+        });
+      }
+      summary = `Getränkeliste ${command.listKey}: ${command.cells.length} geprüfte Zellen`;
+      break;
+    }
     case "savePlayer": {
       if (
         state.players.some(
@@ -294,6 +358,17 @@ export function applyCommand(
       break;
     }
     case "savePenaltyType": {
+      if (
+        state.penaltyTypes.some(
+          (p) =>
+            p.id !== command.id &&
+            p.name.trim().toLocaleLowerCase("de-DE") ===
+              command.name.trim().toLocaleLowerCase("de-DE"),
+        )
+      )
+        throw new Error(
+          "Kategorie existiert bereits. Zum Aktualisieren die bestehende Kategorie wählen.",
+        );
       if (command.id && !state.penaltyTypes.some((p) => p.id === command.id))
         throw new Error("Kategorie nicht gefunden.");
       const category = {
@@ -447,6 +522,10 @@ export function visibleState(
     ...state,
     role,
     playerId,
+    imports: [],
+    drinkConsumptions: state.drinkConsumptions.filter(
+      (r) => r.playerId === playerId,
+    ),
     players: state.players.filter((p) => p.id === playerId),
     penalties: state.penalties
       .filter((p) => p.playerId === playerId)

@@ -4,17 +4,17 @@ Geprüft in der Codex-Cloud mit Node.js 24.19.0, Next.js 16.4.0 und Chromium. Al
 
 ## Abschließende Ergebnisse
 
-| Prüfung                                             | Ergebnis                                                                                      |
-| --------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| TypeScript (`npm run typecheck`)                    | Bestanden                                                                                     |
-| ESLint (`npm run lint`)                             | Bestanden, keine Warnungen                                                                    |
-| Vitest (`npm test`)                                 | 37 Tests bestanden, keine übersprungen                                                        |
-| PostgreSQL (`npm run test:db`)                      | 16 Prüfungen bestanden                                                                        |
-| Entwicklungsstart (`npm run dev`)                   | Dashboard, Demo-API und interaktive Spielerübersicht geprüft                                  |
-| Wiederholbare Installation (`npm ci`)               | Gespeichertes Installationsskript vollständig ausgeführt                                      |
-| Produktionsbuild (`npm run build -- --webpack`)     | Bestanden                                                                                     |
-| Playwright (`npm run test:e2e`)                     | 6 aktuelle WhatsApp-Prüfungen bestanden; 12 übrige Browserfälle im vorherigen Stand bestanden |
-| Produktions-Abhängigkeiten (`npm audit --omit=dev`) | Keine gemeldeten Schwachstellen im geprüften Stand                                            |
+| Prüfung                                             | Ergebnis                                                     |
+| --------------------------------------------------- | ------------------------------------------------------------ |
+| TypeScript (`npm run typecheck`)                    | Bestanden                                                    |
+| ESLint (`npm run lint`)                             | Bestanden, keine Warnungen                                   |
+| Vitest (`npm test`)                                 | 51 Tests bestanden, keine übersprungen                       |
+| PostgreSQL (`npm run test:db`)                      | 19 Prüfungen bestanden                                       |
+| Entwicklungsstart (`npm run dev`)                   | Dashboard, Demo-API und interaktive Spielerübersicht geprüft |
+| Wiederholbare Installation (`npm ci`)               | Gespeichertes Installationsskript vollständig ausgeführt     |
+| Produktionsbuild (`npm run build -- --webpack`)     | Bestanden                                                    |
+| Playwright (`npm run test:e2e`)                     | 26 Prüfungen bestanden: 13 Desktop + 13 in iPhone-Größe      |
+| Produktions-Abhängigkeiten (`npm audit --omit=dev`) | Keine gemeldeten Schwachstellen im geprüften Stand           |
 
 Die Browserprüfungen starten einen eigenen Produktionsserver; sie lesen und verändern Daten, exportieren CSV, prüfen Rollenansichten, Katalogpflege, Konto-Anonymisierung, Rückbuchung und die Offline-Seite. Alle Prüfungen sind abgeschlossen. Während der Entwicklung gescheiterte Prüfungen und ihre Ursachen sind unten dokumentiert.
 
@@ -33,7 +33,7 @@ Die Browserprüfungen starten einen eigenen Produktionsserver; sie lesen und ver
 
 ## Grenzen der Aussagekraft
 
-Die PostgreSQL-Prüfungen verwenden PGlite mit simuliertem `auth.uid()`. Kein Supabase-Projekt war angebunden. Auth, SMTP, Redirect-Templates und echte Supabase-Netzwerkzugriffe sind noch an einem konfigurierten Projekt zu prüfen. Die Browserprüfungen verwenden Chromium, auch für die iPhone-Größe; Safari und echte Mobilgeräte sind nicht abgedeckt. PayPal-/Bankimporte und OpenAI-Aufrufe sind noch nicht freigeschaltet. Der WhatsApp-TXT-Import ist integriert und lokal sowie gegen die PostgreSQL-RPCs geprüft.
+Die PostgreSQL-Prüfungen verwenden PGlite mit simuliertem `auth.uid()`. Kein Supabase-Projekt war angebunden. Auth, SMTP, Redirect-Templates und echte Supabase-Netzwerkzugriffe sind noch an einem konfigurierten Projekt zu prüfen. Die Browserprüfungen verwenden Chromium, auch für die iPhone-Größe; Safari und echte Mobilgeräte sind nicht abgedeckt. PayPal-/Bankimporte und WhatsApp-OpenAI-Aufrufe sind noch nicht freigeschaltet. Der optionale OpenAI-Adapter für Getränkefotos ist implementiert; echte Anbieteraufrufe und Bilderkennungsqualität wurden mangels Testkonto nicht geprüft. Der WhatsApp-TXT-Import ist integriert und lokal sowie gegen die PostgreSQL-RPCs geprüft.
 
 ## Erweiterung: WhatsApp-Kurzformen
 
@@ -53,3 +53,14 @@ Die PostgreSQL-Prüfungen verwenden PGlite mit simuliertem `auth.uid()`. Kein Su
 - Alle sechs WhatsApp-Browserprüfungen bestanden auf Desktop und in iPhone-Größe, einschließlich des neuen Ablaufs mit vollständigem Chat, Änderung und erneuter Anwendung des Zeitraums, gesperrtem ungültigem Zeitraum und Übernahme nur zulässiger Vorschläge. Keine neuen Datenbankmigrationen oder Änderungen an der Zahlungslogik.
 - ESLint und separate TypeScript-Prüfung bestanden. Der normale Turbopack-Build scheiterte in der aktuellen Sandbox an einem gesperrten internen Port; auch die erste Wiederholung mit erweiterten Rechten scheiterte daran. Ein Webpack-Build innerhalb der Sandbox scheiterte beim TypeScript-Unterprozess (`--showConfig`); mit erweiterten Ausführungsrechten bestand `npm run build -- --webpack` vollständig. Das Projekt-Buildskript bleibt unverändert; die Alternative ist eine Verifikationsmöglichkeit für diese Cloud-Umgebung.
 - Git-Zugriff und lokaler Browser-Testserver benötigten in der aktuellen Sandbox erweiterte Ausführungsrechte. Abruf und Browserprüfungen waren damit erfolgreich.
+
+## Erweiterung: PDF-/Excel-Katalog und Getränkelisten
+
+- Installation aus dem Lockfile mit `npm ci` bestanden. Der Postinstall-Schritt kopiert den passenden PDF-Worker nach `public/`; er wird nicht als generierter Fremdcode eingecheckt. Produktionsaudit meldet keine bekannten Schwachstellen. PDF.js 6.4.299, read-excel-file 9.3.12 und Sharp 0.35.5 sind festgeschrieben.
+- 51 Fachtests bestanden: neue Fälle für Spaltenzuordnung, Euro/Cent, PDF-Zeilen, XLSX-Archivgrenzen, atomare Katalogübernahme, bestehende Kategorien, Bildsignaturen, unsichere/mehrdeutige Namen, ungültige Datumszellen, Mengenberechnung, private Spieleransichten und logische Dubletten bei neuen Fotos.
+- Alle drei Migrationen samt wiederholbarem Seed erfolgreich auf PGlite angewendet. 19 PostgreSQL-Prüfungen bestanden, einschließlich neuer Admin-/RLS-Tests, unveränderlicher Quellzellen, korrekt erzeugter Forderungen, Importprotokollen, Dateidubletten, Teamgrenzen und vollständiger Rückabwicklung fehlerhafter Stapel. Die private alte RPC-Implementierung ist nicht für authentifizierte Benutzer aufrufbar.
+- Alle 26 Playwright-Prüfungen bestanden auf Desktop und in iPhone-Größe. Neue Browserfälle laden echte fiktive XLSX-/PDF-Dateien, prüfen Vorschau und wiederholte Übernahme. Getränketests prüfen pro Foto zurückgesetzte Freigabe, automatische Namenszuordnung, menschliche Mengenprüfung, manuelle Erfassung ohne Schlüssel und gesperrte Demo-/Cross-Origin-API-Aufrufe. Der Anbieter wird im Foto-Erkennungsfall ausdrücklich gemockt; es findet keine echte OpenAI-Verarbeitung statt.
+- TypeScript, ESLint und abschließender Produktionsbuild mit Webpack bestanden. Bestehende Dashboard-, Zahlungs-, Rückbuchungs-, WhatsApp-, Rollen- und Offline-Prüfungen bestanden ebenfalls nach der Erweiterung.
+- Frühere Prüfungen während dieser Erweiterung: TypeScript fand eine falsche Spaltenreferenz sowie eine in PDF.js 6 entfernte Option; beides korrigiert. ESLint prüfte zunächst den generierten, minifizierten PDF-Worker und meldete Fremdcodefehler; dieser wird jetzt explizit von Lint/Formatierung ausgeschlossen. Eine Formatprüfung fand vorübergehend einen falschen Stylesheetinhalt; die Ausgangsstile wurden vollständig wiederhergestellt und die Importstile ergänzt, anschließend im Desktop-/Mobilbrowser geprüft. Das Erzeugen der fiktiven PNG-Testdatei meldete einen nicht beschreibbaren Fontconfig-Cache; die Bilddatei wurde erstellt und erfolgreich in beiden Browsergrößen geladen.
+
+Die echte Bildqualität muss mit einem eingerichteten Supabase-/OpenAI-Konto und einem anonymisierten Beispielfoto validiert werden. Gescannte PDFs, alte XLS-Dateien und HEIC-Fotos sind in dieser Version nicht unterstützt. Es gibt keinen automatischen Forderungseintrag allein durch eine KI-Antwort: erst die ausdrückliche Prüfung/Übernahme bucht die Getränkeforderung.

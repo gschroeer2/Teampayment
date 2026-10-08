@@ -56,6 +56,20 @@ export async function loadState(): Promise<AppState> {
   const d = team.data!;
   return {
     mode: "supabase",
+    imports: (data.import_batches ?? []).map((r) => ({
+      source: r.source,
+      hash: r.file_hash,
+    })),
+    drinkConsumptions: (data.drink_consumptions ?? []).map((r) => ({
+      id: r.id,
+      playerId: r.player_id,
+      date: r.date,
+      listKey: r.list_key,
+      count: r.count,
+      unitPriceCents: r.unit_price_cents,
+      penaltyId: r.penalty_id,
+      imageHash: r.image_hash,
+    })),
     role: member.role,
     playerId: member.player_id,
     team: { id: d.id, name: d.name, retentionDays: d.retention_days },

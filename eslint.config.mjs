@@ -12,6 +12,7 @@ export default defineConfig([
     "node_modules/**",
     "next-env.d.ts",
     "test-results/**",
+    "public/pdf.worker.min.mjs",
     "playwright-report/**",
   ]),
   js.configs.recommended,

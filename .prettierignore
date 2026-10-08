@@ -6,3 +6,5 @@ test-results/
 playwright-report/
 *.tsbuildinfo
 supabase/
+
+public/pdf.worker.min.mjs

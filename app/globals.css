@@ -2113,3 +2113,56 @@ textarea {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.import-section {
+  margin: 24px 0;
+  padding: 24px;
+}
+.import-section > p {
+  margin: 12px 0;
+}
+.import-section label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  margin: 12px 0;
+}
+.import-section input:not([type="checkbox"]),
+.import-section select {
+  width: 100%;
+  min-width: 0;
+}
+.import-mapping {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.catalog-import-row,
+.drink-cell {
+  padding: 16px 0;
+  border-top: 1px solid var(--border);
+}
+.catalog-import-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.import-section .import-check,
+.catalog-import-row > label:first-child {
+  flex-direction: row;
+  align-items: center;
+}
+.drink-photo {
+  width: 100%;
+  height: auto;
+  max-height: 420px;
+  object-fit: contain;
+  margin: 16px 0;
+}
+@media (max-width: 640px) {
+  .import-mapping,
+  .catalog-import-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

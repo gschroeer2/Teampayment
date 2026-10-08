@@ -8,7 +8,44 @@ export const dateSchema = z.iso.date().refine((value) => {
     !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
   );
 }, "Ungültiges Datum");
+const catalogEntry = z.object({
+  id: id.optional(),
+  name,
+  description: z.string().trim().max(500),
+  aliases: z.array(z.string().trim().min(2).max(100)).max(30),
+  amountCents: amount,
+  active: z.boolean(),
+});
 export const commandSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("importPenaltyCatalog"),
+    fileHash: z.string().regex(/^[a-f0-9]{64}$/),
+    rows: z.array(catalogEntry).min(1).max(50),
+  }),
+  z.object({
+    type: z.literal("recordDrinks"),
+    listKey: z
+      .string()
+      .trim()
+      .min(2)
+      .max(100)
+      .transform((v) => v.toLocaleLowerCase("de-DE")),
+    imageHash: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/)
+      .nullable(),
+    unitPriceCents: z.number().int().min(1).max(100_000),
+    cells: z
+      .array(
+        z.object({
+          playerId: id,
+          date: dateSchema,
+          count: z.number().int().min(1).max(500),
+        }),
+      )
+      .min(1)
+      .max(50),
+  }),
   z.object({
     type: z.literal("savePlayer"),
     id: id.optional(),
@@ -94,6 +131,7 @@ export function canManage(role: string) {
 export function authorize(role: string, command: Command) {
   const adminOnly = [
     "savePenaltyType",
+    "importPenaltyCatalog",
     "updateSettings",
     "setMembership",
     "anonymizePlayer",

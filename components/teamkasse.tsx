@@ -44,6 +44,8 @@ import { createDemo } from "@/lib/demo";
 import { makeCsv, downloadFile } from "@/lib/csv";
 import Link from "next/link";
 import { signOut } from "@/app/login/actions";
+import { CatalogImport } from "./catalog-import";
+import { DrinksImport } from "./drinks-import";
 import { WhatsAppImport } from "./whatsapp-import";
 import { demoStorageSchema } from "@/lib/storage";
 
@@ -313,7 +315,7 @@ export default function TeamKasse({
               [
                 "Spieler-ID",
                 "Name",
-                "Bestätigte Strafen EUR",
+                "Bestätigte Forderungen EUR",
                 "Zugeordnete Zahlungen EUR",
                 "Offen EUR",
                 "Guthaben EUR",
@@ -626,7 +628,7 @@ export default function TeamKasse({
                 <section className="panel recent-panel">
                   <div className="panel-heading">
                     <div>
-                      <h2>Letzte Strafen</h2>
+                      <h2>Letzte Forderungen</h2>
                       <p>Was zuletzt in eurer Kasse passiert ist</p>
                     </div>
                     <button
@@ -1022,11 +1024,11 @@ export default function TeamKasse({
               <div className="info-card">
                 <CircleHelp size={22} />
                 <div>
-                  <strong>WhatsApp-TXT-Import verfügbar</strong>
+                  <strong>Dateiimporte prüfen und übernehmen</strong>
                   <p>
                     WhatsApp-Strafmeldungen werden anhand des Strafenkatalogs
-                    vorgeschlagen. Zahlungsimporte und KI-Verarbeitung folgen in
-                    einem späteren Entwicklungsschritt.
+                    vorgeschlagen. Katalogdateien und Getränkelisten haben
+                    eigene Prüfmasken. Zahlungsimporte folgen später.
                   </p>
                 </div>
               </div>
@@ -1036,6 +1038,20 @@ export default function TeamKasse({
                 error={error}
                 onSubmit={execute}
               />
+              <DrinksImport
+                state={state}
+                busy={busy}
+                error={error}
+                onSubmit={execute}
+              />
+              {admin && (
+                <CatalogImport
+                  state={state}
+                  busy={busy}
+                  error={error}
+                  onSubmit={execute}
+                />
+              )}
               <div className="import-grid">
                 {[
                   {
@@ -1124,6 +1140,12 @@ export default function TeamKasse({
               </section>
               {admin && (
                 <>
+                  <CatalogImport
+                    state={state}
+                    busy={busy}
+                    error={error}
+                    onSubmit={execute}
+                  />
                   <section className="panel settings-section">
                     <div className="panel-heading">
                       <div>
@@ -2063,6 +2085,9 @@ function PenaltyRows({
                     <span>
                       <strong>{player?.name ?? "Unbekannt"}</strong>
                       <small>{p.reason}</small>
+                      {p.source === "drinks" && (
+                        <small>Getränkeforderung</small>
+                      )}
                       {p.source === "whatsapp" && (
                         <small>Quelle: WhatsApp</small>
                       )}
@@ -2133,7 +2158,7 @@ function PenaltyRows({
         </tbody>
       </table>
       {!items.length && (
-        <Empty text="Für diese Auswahl gibt es keine Strafen." />
+        <Empty text="Für diese Auswahl gibt es keine Forderungen." />
       )}
     </div>
   );

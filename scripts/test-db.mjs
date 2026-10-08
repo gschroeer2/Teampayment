@@ -54,6 +54,15 @@ try {
     ),
   );
   await db.exec(
+    await readFile(
+      new URL(
+        "../supabase/migrations/003_catalog_and_drinks.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  );
+  await db.exec(
     await readFile(new URL("../supabase/seed.sql", import.meta.url), "utf8"),
   );
   await db.exec(
@@ -467,6 +476,176 @@ try {
         ])
       ).rows[0].state;
       assert.ok(own.penalties.every((p) => !("evidence_excerpt" in p)));
+    },
+  );
+  await check(
+    "catalog batch is admin-only, atomic and protected against duplicate files/names",
+    async () => {
+      const data = {
+        type: "importPenaltyCatalog",
+        fileHash: "c".repeat(64),
+        rows: [
+          {
+            name: "Katalog-Test",
+            description: "Fiktiv",
+            amountCents: 350,
+            aliases: ["Testkurz"],
+            active: true,
+          },
+        ],
+      };
+      await assert.rejects(command(ids.cashier, data));
+      await assert.rejects(command(ids.player, data));
+      await command(ids.admin, data);
+      await assert.rejects(command(ids.admin, data));
+      assert.equal(
+        (
+          await db.query(
+            "select count(*)::int as n from public.penalty_types where name='Katalog-Test'",
+          )
+        ).rows[0].n,
+        1,
+      );
+      await assert.rejects(
+        command(ids.admin, {
+          ...data,
+          fileHash: "b".repeat(64),
+          rows: [
+            { ...data.rows[0], name: "Rollback-Kategorie" },
+            { ...data.rows[0], name: "Ungültig", amountCents: -1 },
+          ],
+        }),
+      );
+      assert.equal(
+        (
+          await db.query(
+            "select count(*)::int as n from public.penalty_types where name='Rollback-Kategorie'",
+          )
+        ).rows[0].n,
+        0,
+      );
+      await assert.rejects(
+        command(ids.admin, {
+          ...data,
+          fileHash: "b".repeat(64),
+          rows: [{ ...data.rows[0], name: "KATALOG-TEST" }],
+        }),
+      );
+      await assert.rejects(
+        as(ids.admin, "select private.teamkasse_command_v2($1,$2::jsonb)", [
+          ids.team,
+          JSON.stringify({ type: "updateSettings", retentionDays: 90 }),
+        ]),
+      );
+    },
+  );
+  await check(
+    "drink quantities create exact ledger charges with RLS and immutable source cells",
+    async () => {
+      const data = {
+        type: "recordDrinks",
+        listKey: "training-oktober-2026",
+        imageHash: "d".repeat(64),
+        unitPriceCents: 150,
+        cells: [
+          { playerId: ids.p1, date: "2026-10-08", count: 3 },
+          { playerId: ids.p2, date: "2026-10-08", count: 2 },
+        ],
+      };
+      const before = (
+        await db.query(
+          "select coalesce(sum(amount_cents),0)::int as n from public.penalties where player_id=$1 and status='confirmed'",
+          [ids.p1],
+        )
+      ).rows[0].n;
+      await assert.rejects(command(ids.player, data));
+      await assert.rejects(command(ids.outsider, data));
+      await command(ids.cashier, data);
+      const after = (
+        await db.query(
+          "select coalesce(sum(amount_cents),0)::int as n from public.penalties where player_id=$1 and status='confirmed'",
+          [ids.p1],
+        )
+      ).rows[0].n;
+      assert.equal(after - before, 450);
+      assert.equal(
+        (await as(ids.player, "select * from public.drink_consumptions")).rows
+          .length,
+        1,
+      );
+      assert.equal(
+        (await as(ids.cashier, "select * from public.drink_consumptions")).rows
+          .length,
+        2,
+      );
+      await assert.rejects(
+        as(ids.cashier, "update public.drink_consumptions set count=99"),
+      );
+      await assert.rejects(command(ids.cashier, data));
+      await assert.rejects(
+        command(ids.cashier, { ...data, imageHash: "e".repeat(64) }),
+      );
+      await assert.rejects(
+        command(ids.cashier, { ...data, listKey: "andere-liste" }),
+      );
+      assert.equal(
+        (
+          await db.query(
+            "select count(*)::int as n from public.penalties where source='drinks'",
+          )
+        ).rows[0].n,
+        2,
+      );
+      await command(ids.cashier, {
+        ...data,
+        cells: [{ playerId: ids.p2, date: "2026-10-09", count: 1 }],
+      });
+      assert.equal(
+        (
+          await db.query(
+            "select row_count from public.import_batches where source='drinks'",
+          )
+        ).rows[0].row_count,
+        3,
+      );
+    },
+  );
+  await check(
+    "invalid drink cells roll back the entire import, including its financial rows",
+    async () => {
+      const data = {
+        type: "recordDrinks",
+        listKey: "rollback-test",
+        imageHash: null,
+        unitPriceCents: 150,
+        cells: [
+          { playerId: ids.p2, date: "2026-10-10", count: 2 },
+          { playerId: ids.foreign, date: "2026-10-10", count: 1 },
+        ],
+      };
+      await assert.rejects(command(ids.cashier, data));
+      assert.equal(
+        (
+          await db.query(
+            "select count(*)::int as n from public.drink_consumptions where list_key='rollback-test'",
+          )
+        ).rows[0].n,
+        0,
+      );
+      assert.equal(
+        (
+          await db.query(
+            "select count(*)::int as n from public.penalties where source='drinks' and date='2026-10-10'",
+          )
+        ).rows[0].n,
+        0,
+      );
+      await assert.rejects(
+        command(ids.cashier, {
+          ...data,
+          cells: [{ playerId: ids.p2, date: "2026-10-10", count: 0 }],
+        }),
+      );
     },
   );
   await check(

@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     const { supabase, member } = await getContext();
     let body: string;
     try {
-      body = await readLimitedBody(request);
+      body = await readLimitedBody(request, 256_000);
     } catch {
       return NextResponse.json(
         { error: "Anfrage zu groß oder ungültig." },
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: duplicate
-            ? "Spieler-ID, Konto-Zuordnung, Transaktion oder WhatsApp-Nachricht ist bereits vorhanden."
+            ? "Spieler-ID, Konto-Zuordnung, Transaktion WhatsApp-Nachricht, Kategorie oder Getränkezelle ist bereits vorhanden."
             : "Änderung nicht möglich. Zuordnung, Status und Beträge prüfen.",
         },
         { status: error.code === "42501" ? 403 : 409 },

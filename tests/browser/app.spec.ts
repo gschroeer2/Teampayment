@@ -385,3 +385,174 @@ test("WhatsApp-Zeitraum filtert den gesamten Export und entfernt veraltete Vorsc
     page.getByRole("form", { name: "Strafenvorschlag: Jo Bierdeckel" }),
   ).toHaveCount(0);
 });
+
+for (const extension of ["xlsx", "pdf"]) {
+  test(`Strafenkatalog aus ${extension.toUpperCase()} importiert geprüfte Kategorien und verhindert Dubletten`, async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await nav(page, "Verwaltung").click();
+    const panel = page.getByRole("region", {
+      name: "Strafenkatalog importieren",
+    });
+    await panel
+      .getByLabel("Katalogdatei auswählen")
+      .setInputFiles(`tests/fixtures/catalog.${extension}`);
+    await expect(panel.getByLabel("Kategorie 1", { exact: true })).toHaveValue(
+      "Testvergehen",
+    );
+    await expect(panel.getByLabel("Betrag 1", { exact: true })).toHaveValue(
+      extension === "xlsx" ? "3.5" : "3,50",
+    );
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth > window.innerWidth,
+      ),
+    ).toBe(false);
+    await panel
+      .getByRole("button", { name: "Geprüfte Kategorien übernehmen" })
+      .click();
+    await expect(
+      panel.getByText("Diese Katalogdatei wurde bereits übernommen."),
+    ).toBeVisible();
+    await expect(page.getByText("Testvergehen", { exact: true })).toBeVisible();
+    await page.reload();
+    await nav(page, "Verwaltung").click();
+    await panel
+      .getByLabel("Katalogdatei auswählen")
+      .setInputFiles(`tests/fixtures/catalog.${extension}`);
+    await expect(
+      panel.getByText("Diese Katalogdatei wurde bereits übernommen."),
+    ).toBeVisible();
+    await expect(
+      panel.getByRole("button", { name: "Geprüfte Kategorien übernehmen" }),
+    ).toHaveCount(0);
+  });
+}
+
+test("Getränkefoto braucht Freigabe pro Bild, prüft Zuordnung und verhindert Doppelbuchungen (Erkennung gemockt)", async ({
+  page,
+}) => {
+  let calls = 0;
+  await page.route("**/api/drinks/analyze", async (route) => {
+    if (route.request().method() === "GET")
+      return route.fulfill({
+        json: {
+          available: true,
+          reason: "Fiktiver Anbieter für diesen Browsertest.",
+        },
+      });
+    expect(route.request().postDataJSON().consent).toBe(true);
+    calls++;
+    return route.fulfill({
+      json: {
+        rows: [
+          {
+            name: "Jo",
+            cells: [{ date: "08.10.", count: 3, uncertain: false }],
+          },
+          {
+            name: "Unbekannt",
+            cells: [{ date: "08.10.2026", count: null, uncertain: true }],
+          },
+        ],
+        notes: ["Fiktive Erkennung im Browsertest"],
+      },
+    });
+  });
+  await page.goto("/");
+  await nav(page, "Importe").click();
+  const panel = page.getByRole("region", { name: "Getränkeliste prüfen" });
+  await panel.getByLabel("Listenkennung").fill("training-oktober-2026");
+  await panel.getByLabel("Preis pro Getränk in Euro").fill("1,50");
+  await panel.getByLabel("Jahr der Datumsüberschriften").fill("2026");
+  await panel
+    .getByLabel("Getränkefoto auswählen")
+    .setInputFiles("tests/fixtures/drinks.png");
+  await expect(panel.getByRole("img")).toBeVisible();
+  const consent = panel.getByLabel(/Ich gebe dieses Foto/);
+  await expect(consent).not.toBeChecked();
+  await expect(
+    panel.getByRole("button", { name: "Foto automatisch erkennen" }),
+  ).toBeDisabled();
+  expect(calls).toBe(0);
+  await consent.check();
+  await panel
+    .getByRole("button", { name: "Foto automatisch erkennen" })
+    .click();
+  await expect(panel.getByLabel("Getränke Teammitglied 1")).toHaveValue(
+    "20000000-0000-4000-8000-000000000001",
+  );
+  await expect(panel.getByLabel("Anzahl Getränke 1")).toHaveValue("3");
+  await expect(panel.getByLabel("Getränkedatum 1")).toHaveValue("2026-10-08");
+  await expect(panel.getByLabel("Getränke Teammitglied 2")).toHaveValue("");
+  await expect(panel.getByLabel("Anzahl Getränke 2")).toHaveValue("");
+  await expect(panel.getByText(/Gesamtbetrag:/)).toContainText("4,50");
+  await expect(
+    panel.getByRole("button", {
+      name: "Geprüfte Getränkeforderungen übernehmen",
+    }),
+  ).toBeDisabled();
+  await panel.getByLabel(/Ich habe Personen/).check();
+  await panel
+    .getByRole("button", { name: "Geprüfte Getränkeforderungen übernehmen" })
+    .click();
+  await expect(
+    panel.getByText("Bereits erfasst – wird übersprungen"),
+  ).toBeVisible();
+  const saved = await page.evaluate(() =>
+    localStorage.getItem("teamkasse-demo-v1"),
+  );
+  expect(saved).not.toContain("data:image/");
+  expect(JSON.parse(saved!).state.drinkConsumptions).toHaveLength(1);
+  await panel
+    .getByLabel("Getränkefoto auswählen")
+    .setInputFiles("tests/fixtures/drinks.png");
+  await expect(consent).not.toBeChecked();
+  await nav(page, "Strafen").click();
+  await expect(
+    page.getByRole("row").filter({ hasText: "Getränkeforderung" }),
+  ).toContainText("4,50");
+});
+
+test("Getränkemaske funktioniert ohne API-Schlüssel und Foto-Erkennung ist im Demo gesperrt", async ({
+  page,
+  request,
+}) => {
+  await page.goto("/");
+  await nav(page, "Importe").click();
+  const panel = page.getByRole("region", { name: "Getränkeliste prüfen" });
+  await expect(
+    panel.getByText(/Automatische Fotoerkennung benötigt/),
+  ).toBeVisible();
+  await panel
+    .getByRole("button", { name: "Verbrauchszelle manuell ergänzen" })
+    .click();
+  await panel.getByLabel("Name aus der Liste 1").fill("Jo");
+  await expect(panel.getByLabel("Getränke Teammitglied 1")).toHaveValue(
+    "20000000-0000-4000-8000-000000000001",
+  );
+  await panel.getByLabel("Listenkennung").fill("manuelle-demo-liste");
+  await panel.getByLabel("Preis pro Getränk in Euro").fill("2,00");
+  await panel.getByLabel("Getränkedatum 1").fill("2026-10-08");
+  await panel.getByLabel("Anzahl Getränke 1").fill("2");
+  await panel.getByLabel(/Ich habe Personen/).check();
+  await panel
+    .getByRole("button", { name: "Geprüfte Getränkeforderungen übernehmen" })
+    .click();
+  await expect(
+    panel.getByText("Bereits erfasst – wird übersprungen"),
+  ).toBeVisible();
+  const blocked = await request.post("/api/drinks/analyze", {
+    headers: { Origin: "https://untrusted.example" },
+    data: { consent: true, image: "data:image/png;base64,TEST" },
+  });
+  expect(blocked.status()).toBe(403);
+  const demo = await request.post("/api/drinks/analyze", {
+    headers: { Origin: "http://localhost:3100" },
+    data: { consent: true, image: "data:image/png;base64,TEST" },
+  });
+  expect(demo.status()).toBe(409);
+  await page.getByLabel("Demo-Rolle").selectOption("player");
+  await expect(panel).toHaveCount(0);
+});

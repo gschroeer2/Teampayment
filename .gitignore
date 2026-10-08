@@ -7,3 +7,5 @@ coverage/
 *.tsbuildinfo
 playwright-report/
 test-results/
+
+/public/pdf.worker.min.mjs

@@ -1,6 +1,17 @@
 import type { Role, PenaltyStatus } from "./types";
 /** Result of teamkasse_state. Keep these boundary types in sync with the migration. */
 export interface DatabaseSnapshot {
+  drink_consumptions: Array<{
+    id: string;
+    player_id: string;
+    date: string;
+    list_key: string;
+    count: number;
+    unit_price_cents: number;
+    penalty_id: string;
+    image_hash: string | null;
+  }>;
+  import_batches: Array<{ source: string; file_hash: string }>;
   team: { id: string; name: string; retention_days: number };
   players: Array<{
     id: string;
@@ -30,7 +41,7 @@ export interface DatabaseSnapshot {
     status: PenaltyStatus;
     created_at: string;
     correction_note: string | null;
-    source: "manual" | "whatsapp";
+    source: "manual" | "whatsapp" | "drinks";
     source_hash: string | null;
     evidence_excerpt?: string | null;
   }>;

@@ -127,6 +127,8 @@ export function createDemo(): AppState {
   ];
   return {
     mode: "demo",
+    drinkConsumptions: [],
+    imports: [],
     team: {
       id: teamId,
       name: "FC Eintracht · Erste Mannschaft",

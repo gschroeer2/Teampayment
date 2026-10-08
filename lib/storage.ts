@@ -8,6 +8,23 @@ export const demoStorageSchema = z.object({
   version: z.literal(1),
   state: z.object({
     mode: z.literal("demo"),
+    imports: z
+      .array(z.object({ source: z.string(), hash: z.string() }))
+      .default([]),
+    drinkConsumptions: z
+      .array(
+        z.object({
+          id,
+          playerId: id,
+          date,
+          listKey: z.string(),
+          count: z.number().int().positive(),
+          unitPriceCents: cent.positive(),
+          penaltyId: id,
+          imageHash: z.string().nullable(),
+        }),
+      )
+      .default([]),
     role,
     playerId: id.nullable(),
     team: z.object({
@@ -48,7 +65,7 @@ export const demoStorageSchema = z.object({
         status: z.enum(["proposed", "confirmed", "rejected", "cancelled"]),
         createdAt: z.string(),
         correctionNote: z.string().optional(),
-        source: z.enum(["manual", "whatsapp"]).optional(),
+        source: z.enum(["manual", "whatsapp", "drinks"]).optional(),
         sourceHash: z
           .string()
           .regex(/^[a-f0-9]{64}$/)
