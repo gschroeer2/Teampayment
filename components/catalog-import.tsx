@@ -1,9 +1,9 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { AppState } from "@/lib/types";
-import { commandSchema, type Command } from "@/lib/commands";
+import type { Command } from "@/lib/commands";
 import {
-  catalogAmount,
+  catalogImportCommand,
   catalogRows,
   readCatalogFile,
   type CatalogDraft,
@@ -12,12 +12,10 @@ import {
 export function CatalogImport({
   state,
   busy,
-  error,
   onSubmit,
 }: {
   state: AppState;
   busy: boolean;
-  error: string;
   onSubmit: (c: Command) => Promise<void>;
 }) {
   const [sheets, setSheets] = useState<CatalogSheet[]>([]),
@@ -34,6 +32,16 @@ export function CatalogImport({
     [hash, setHash] = useState("");
   const [reading, setReading] = useState(false),
     [failure, setFailure] = useState("");
+  const [saving, setSaving] = useState(false);
+  const feedbackRef = useRef<HTMLDivElement>(null);
+  const locked = busy || reading || saving;
+  const selectedCount = drafts.filter((row) => row.selected).length;
+  useEffect(() => {
+    if (failure) {
+      feedbackRef.current?.scrollIntoView({ block: "nearest" });
+      feedbackRef.current?.focus({ preventScroll: true });
+    }
+  }, [failure]);
   const imported = state.imports.some(
     (r) => r.source === "catalog" && r.hash === hash,
   );
@@ -105,31 +113,21 @@ export function CatalogImport({
     );
   }
   async function save() {
+    if (locked) return;
     setFailure("");
+    setSaving(true);
     try {
-      const rows = drafts
-        .filter((r) => r.selected)
-        .map((r) => ({
-          ...(r.id ? { id: r.id } : {}),
-          name: r.name,
-          description: r.description,
-          aliases: r.aliases
-            .split(",")
-            .map((a) => a.trim())
-            .filter(Boolean),
-          amountCents: catalogAmount(r.price, unit),
-          active: state.penaltyTypes.find((t) => t.id === r.id)?.active ?? true,
-        }));
-      const parsed = commandSchema.safeParse({
-        type: "importPenaltyCatalog",
-        fileHash: hash,
-        rows,
-      });
-      if (!parsed.success)
-        throw new Error(parsed.error.issues.map((i) => i.message).join(" · "));
-      await onSubmit(parsed.data);
+      const command = catalogImportCommand(
+        drafts,
+        state.penaltyTypes,
+        hash,
+        unit,
+      );
+      await onSubmit(command);
     } catch (e) {
       setFailure(e instanceof Error ? e.message : "Bitte Vorschau prüfen.");
+    } finally {
+      setSaving(false);
     }
   }
   const titles = sheets[sheet]?.rows[Math.max(0, header - 1)] ?? [];
@@ -149,7 +147,7 @@ export function CatalogImport({
         <input
           type="file"
           accept=".xlsx,.pdf"
-          disabled={busy || reading}
+          disabled={locked}
           onChange={(e) => {
             void read(e.target.files?.[0]);
             e.target.value = "";
@@ -158,7 +156,7 @@ export function CatalogImport({
       </label>
       {reading && <p role="status">Katalog wird gelesen …</p>}
       {sheets.length > 0 && (
-        <div className="import-mapping">
+        <fieldset disabled={locked} className="import-mapping">
           <label>
             Tabellenblatt
             <select
@@ -234,12 +232,13 @@ export function CatalogImport({
           >
             Spaltenzuordnung anwenden
           </button>
-        </div>
+        </fieldset>
       )}
       {hash && (
         <label>
           Betragseinheit
           <select
+            disabled={locked}
             value={unit}
             onChange={(e) => setUnit(e.target.value as "euro" | "cent")}
           >
@@ -247,11 +246,6 @@ export function CatalogImport({
             <option value="cent">Cent</option>
           </select>
         </label>
-      )}
-      {(failure || error) && (
-        <p className="form-error" role="alert">
-          {failure || error}
-        </p>
       )}
       {imported ? (
         <p role="status">Diese Katalogdatei wurde bereits übernommen.</p>
@@ -263,7 +257,7 @@ export function CatalogImport({
               erlaubt deren Aktualisierung; vorhandene Forderungen behalten
               ihren bisherigen Betrag.
             </p>
-            <div className="catalog-import-rows">
+            <fieldset disabled={locked} className="catalog-import-rows">
               {drafts.map((r, i) => (
                 <div className="catalog-import-row" key={i}>
                   <label>
@@ -309,18 +303,32 @@ export function CatalogImport({
                   </label>
                 </div>
               ))}
-            </div>
+            </fieldset>
+            <p role="status">
+              {selectedCount} von {drafts.length} Kategorien ausgewählt.
+              {selectedCount === 0 &&
+                " Bitte mindestens eine Kategorie auswählen; vorhandene Kategorien sind zunächst abgewählt."}
+            </p>
             <button
               type="button"
               className="button primary"
-              disabled={busy || reading || !drafts.some((r) => r.selected)}
+              disabled={locked || selectedCount === 0}
               onClick={() => void save()}
             >
-              Geprüfte Kategorien übernehmen
+              {saving || busy
+                ? "Kategorien werden übernommen …"
+                : "Geprüfte Kategorien übernehmen"}
             </button>
           </>
         )
       )}
+      <div ref={feedbackRef} tabIndex={-1}>
+        {failure && (
+          <p className="error" role="alert">
+            {failure}
+          </p>
+        )}
+      </div>
     </section>
   );
 }

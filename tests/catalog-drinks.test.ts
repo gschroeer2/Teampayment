@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { readFile } from "node:fs/promises";
 import {
   catalogAmount,
+  catalogImportCommand,
   catalogRows,
   pdfCatalogLines,
   validateXlsxArchive,
@@ -52,6 +53,89 @@ describe("Katalogimport", () => {
     expect(catalogAmount("350", "cent")).toBe(350);
     expect(() => catalogAmount("3.5", "cent")).toThrow();
     expect(() => catalogAmount("0", "euro")).toThrow();
+  });
+  it("akzeptiert Euro-Währungsangaben und eindeutige deutsche Tausenderwerte", () => {
+    for (const price of ["EUR 5,00", "5,00 EUR", "€ 5,00", "5 Euro", "5,00 €"])
+      expect(catalogAmount(price, "euro")).toBe(500);
+    expect(catalogAmount("1.234,56 EUR", "euro")).toBe(123456);
+    for (const price of ["1.000", "EUR 5 EUR 10", "Europe 5", "nach Absprache"])
+      expect(() => catalogAmount(price, "euro")).toThrow();
+    expect(() => catalogAmount("5 EUR", "cent")).toThrow();
+  });
+  it("benennt die tatsächliche Vorschauzeile und lässt den Katalog bei Fehlern unverändert", () => {
+    const drafts = [
+      {
+        name: "Abgewählt",
+        price: "kein Betrag",
+        description: "",
+        aliases: "",
+        selected: false,
+      },
+      {
+        name: "Testvergehen",
+        price: "nach Absprache",
+        description: "",
+        aliases: "",
+        selected: true,
+      },
+    ];
+    expect(() =>
+      catalogImportCommand(drafts, demo.penaltyTypes, "a".repeat(64), "euro"),
+    ).toThrow(/Zeile 2 \(Testvergehen\)/);
+    expect(() =>
+      catalogImportCommand(
+        [{ ...drafts[1], price: "5 EUR", aliases: "x" }],
+        demo.penaltyTypes,
+        "a".repeat(64),
+        "euro",
+      ),
+    ).toThrow(/Erkennungsbegriffe/);
+    expect(() =>
+      catalogImportCommand(
+        [drafts[0]],
+        demo.penaltyTypes,
+        "a".repeat(64),
+        "euro",
+      ),
+    ).toThrow(/Keine Kategorien ausgewählt/);
+    expect(demo.penaltyTypes).toHaveLength(5);
+  });
+  it("prüft doppelte Namen vor Übernahme und ordnet bearbeitete Namen aktuell zu", () => {
+    const existing = demo.penaltyTypes[0],
+      draft = {
+        name: existing.name,
+        price: "7,50",
+        description: existing.description,
+        aliases: existing.aliases.join(", "),
+        selected: true,
+      };
+    const command = catalogImportCommand(
+      [draft],
+      demo.penaltyTypes,
+      "a".repeat(64),
+      "euro",
+    );
+    if (command.type !== "importPenaltyCatalog")
+      throw new Error("Wrong command");
+    expect(command.rows[0].id).toBe(existing.id);
+    const renamed = catalogImportCommand(
+      [{ ...draft, id: existing.id, name: "Neue Kategorie" }],
+      demo.penaltyTypes,
+      "a".repeat(64),
+      "euro",
+    );
+    if (renamed.type !== "importPenaltyCatalog")
+      throw new Error("Wrong command");
+    expect(renamed.rows[0].id).toBeUndefined();
+    expect(() =>
+      catalogImportCommand(
+        [draft, { ...draft, name: existing.name.toUpperCase() }],
+        demo.penaltyTypes,
+        "a".repeat(64),
+        "euro",
+      ),
+    ).toThrow(/Zeile 2.*Doppelter Kategoriename/);
+    expect(applyCommand(demo, command).penaltyTypes[0].amountCents).toBe(750);
   });
   it("erkennt PDF-Textzeilen und lässt mehrere Beträge zur Prüfung offen", () => {
     const rows = pdfCatalogLines([
@@ -266,21 +350,19 @@ describe("Optionale Fotoerkennung", () => {
       ],
       notes: [],
     };
-    const request = vi
-      .fn()
-      .mockResolvedValue(
-        new Response(
-          JSON.stringify({
-            status: "completed",
-            output: [
-              {
-                content: [{ type: "output_text", text: JSON.stringify(sheet) }],
-              },
-            ],
-          }),
-          { status: 200 },
-        ),
-      );
+    const request = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          status: "completed",
+          output: [
+            {
+              content: [{ type: "output_text", text: JSON.stringify(sheet) }],
+            },
+          ],
+        }),
+        { status: 200 },
+      ),
+    );
     expect(
       await recognizeDrinkSheet(
         "data:image/png;base64,TEST",
@@ -300,13 +382,11 @@ describe("Optionale Fotoerkennung", () => {
         "image",
         "test",
         undefined,
-        vi
-          .fn()
-          .mockResolvedValue(
-            new Response(JSON.stringify({ status: "incomplete" }), {
-              status: 200,
-            }),
-          ),
+        vi.fn().mockResolvedValue(
+          new Response(JSON.stringify({ status: "incomplete" }), {
+            status: 200,
+          }),
+        ),
       ),
     ).rejects.toThrow("unvollständig");
     await expect(

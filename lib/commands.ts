@@ -8,7 +8,7 @@ export const dateSchema = z.iso.date().refine((value) => {
     !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
   );
 }, "Ungültiges Datum");
-const catalogEntry = z.object({
+export const catalogEntrySchema = z.object({
   id: id.optional(),
   name,
   description: z.string().trim().max(500),
@@ -42,7 +42,7 @@ export const commandSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("importPenaltyCatalog"),
     fileHash: z.string().regex(/^[a-f0-9]{64}$/),
-    rows: z.array(catalogEntry).min(1).max(50),
+    rows: z.array(catalogEntrySchema).min(1).max(50),
   }),
   z.object({
     type: z.literal("recordDrinks"),

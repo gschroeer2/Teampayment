@@ -8,12 +8,12 @@ Geprüft in der Codex-Cloud mit Node.js 24.19.0, Next.js 16.4.0 und Chromium. Al
 | --------------------------------------------------- | ------------------------------------------------------------ |
 | TypeScript (`npm run typecheck`)                    | Bestanden                                                    |
 | ESLint (`npm run lint`)                             | Bestanden, keine Warnungen                                   |
-| Vitest (`npm test`)                                 | 60 Tests bestanden, keine übersprungen                       |
+| Vitest (`npm test`)                                 | 63 Tests bestanden, keine übersprungen                       |
 | PostgreSQL (`npm run test:db`)                      | 24 Prüfungen bestanden                                       |
 | Entwicklungsstart (`npm run dev`)                   | Dashboard, Demo-API und interaktive Spielerübersicht geprüft |
 | Wiederholbare Installation (`npm ci`)               | Gespeichertes Installationsskript vollständig ausgeführt     |
 | Produktionsbuild (`npm run build -- --webpack`)     | Bestanden                                                    |
-| Playwright (`npm run test:e2e`)                     | 32 Prüfungen bestanden: 16 Desktop + 16 in iPhone-Größe      |
+| Playwright (`npm run test:e2e`)                     | 38 Prüfungen bestanden: 19 Desktop + 19 in iPhone-Größe      |
 | Produktions-Abhängigkeiten (`npm audit --omit=dev`) | Keine gemeldeten Schwachstellen im geprüften Stand           |
 
 Die Browserprüfungen starten einen eigenen Produktionsserver; sie lesen und verändern Daten, exportieren CSV, prüfen Rollenansichten, Katalogpflege, Konto-Anonymisierung, Rückbuchung und die Offline-Seite. Alle Prüfungen sind abgeschlossen. Während der Entwicklung gescheiterte Prüfungen und ihre Ursachen sind unten dokumentiert.
@@ -76,3 +76,13 @@ Die echte Bildqualität muss mit einem eingerichteten Supabase-/OpenAI-Konto und
 - Beim Korrigieren des Selektors wurde vorübergehend auch der Textfeld-Selektor im bestehenden Katalogtest geändert; dieser wurde gezielt wiederhergestellt. Die übrigen 30 Browserprüfungen bestanden in diesem Zwischenlauf.
 
 - Der abschließende vollständige Browserlauf bestand alle 32 Prüfungen (16 Desktop, 16 in iPhone-Größe), einschließlich echter XLSX-/PDF-Dateien, bearbeiteter unbekannter Kategorien, Datei-/dateiübergreifender Dubletten, Persistenz, manueller Kategorieänderung, Rollenansicht sowie Dateityp-/Größenprüfung. TypeScript, ESLint, Formatprüfung und Produktionsbuild mit Webpack bestanden ebenfalls. Die Supabase-Einrichtung in README enthält Migration 004.
+
+## Korrektur: Katalogübernahme ohne sichtbare Rückmeldung
+
+- Das gemeldete Verhalten mit einem normal anklickbaren Übernahme-Button wurde an einer fiktiven zwölfzeiligen XLSX-Datei nachgestellt: ein ungültiger Betrag verhindert die atomare Übernahme, die Meldung lag jedoch oberhalb der Vorschau. Die beiden gezielten Browserprüfungen scheiterten vor der Korrektur auf Desktop und Mobil mit einem Sichtbarkeitsanteil von 0 für die Meldung.
+- Die Katalogmaske zeigt Eingabe- und Speicherfehler nun unter dem Button und führt Fokus/Ansicht zur Meldung. Ausgewählte Zeilen werden gezählt, Eingaben während des Speicherns gesperrt. Speicherfehler werden gezielt an den Katalogaufruf weitergegeben, damit Meldungen anderer Importmasken keinen Scrollsprung im Katalog auslösen. Fehler nennen die tatsächliche Vorschauzeile, den Kategorienamen und die zu korrigierenden Felder. Doppelte ausgewählte Namen werden vor einem Schreibaufruf geprüft; die Zuordnung berücksichtigt korrigierte Namen.
+- `EUR 5,00` und weitere eindeutige Euro-Schreibweisen werden akzeptiert. Deutsche Tausenderpunkte erfordern ein ausdrückliches Dezimalkomma. Fremdwährungen, mehrere Beträge und mehrdeutige Zahlen bleiben gesperrt. Die gemeinsame manuelle Zahlungslogik wurde nicht geändert.
+- Drei neue Fachtests prüfen Geldformate, Zeilen-/Feldfehler, fehlende Auswahl, doppelte Namen und Zuordnung bearbeiteter Kategorien. Insgesamt 63 Vitest-Tests bestanden. Die 24 PostgreSQL-Prüfungen bestanden erneut; keine zusätzliche Migration nötig.
+- Während der Korrektur meldete ESLint eine fehlende Fehlerursache beim Weiterreichen des Betragsfehlers; `cause` wird nun beibehalten. Der zusätzliche Browserfall für Speicherfehler fand zunächst einen TypeScript-Konflikt zwischen Browser-/Node-Typen beim Überschreiben von `crypto.randomUUID`. Die ausschließlich im isolierten Testbrowser vorgenommene Fehler-Injektion verwendet nun `Object.defineProperty`.
+
+- Abschließend bestanden alle 38 Browserprüfungen (19 Desktop, 19 in iPhone-Größe), darunter sichtbare Zeilenfehler am unteren Button, Korrektur und erfolgreiche Übernahme, fehlende Auswahl, doppelte Namen sowie ein ausdrücklich injizierter Speicherfehler mit erfolgreichem Wiederholungsversuch. TypeScript, ESLint, Formatprüfung und Produktionsbuild mit Webpack bestanden. Insgesamt 125 automatisierte Fachlogik-/Datenbank-/Browserprüfungen bestanden. Eine private Nutzerdatei oder ein echtes Supabase-Projekt lag für diesen Fehlerbericht nicht vor; der nachgestellte Fehler und die Tests verwenden ausschließlich fiktive Daten.

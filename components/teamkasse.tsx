@@ -208,7 +208,7 @@ export default function TeamKasse({
       return () => clearTimeout(timer);
     }
   }, [toast]);
-  async function execute(command: Command) {
+  async function execute(command: Command, propagateError = false) {
     setBusy(true);
     setError("");
     try {
@@ -235,6 +235,7 @@ export default function TeamKasse({
       setToast("Änderung gespeichert.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Änderung fehlgeschlagen.");
+      if (propagateError) throw e;
     } finally {
       setBusy(false);
     }
@@ -1081,8 +1082,7 @@ export default function TeamKasse({
                 <CatalogImport
                   state={state}
                   busy={busy}
-                  error={error}
-                  onSubmit={execute}
+                  onSubmit={(command) => execute(command, true)}
                 />
               )}
               <div className="import-grid">
@@ -1176,8 +1176,7 @@ export default function TeamKasse({
                   <CatalogImport
                     state={state}
                     busy={busy}
-                    error={error}
-                    onSubmit={execute}
+                    onSubmit={(command) => execute(command, true)}
                   />
                   <section className="panel settings-section">
                     <div className="panel-heading">

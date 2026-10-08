@@ -673,3 +673,142 @@ test("Personenkategorie manuell ändern und falsche Importdatei ablehnen", async
   });
   await expect(panel.getByText(/überschreitet 5 MB/)).toBeVisible();
 });
+
+test("Katalogübernahme zeigt den Fehler am Button und erlaubt eine Korrektur", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await nav(page, "Verwaltung").click();
+  const panel = page.getByRole("region", {
+    name: "Strafenkatalog importieren",
+  });
+  await panel
+    .getByLabel("Katalogdatei auswählen")
+    .setInputFiles("tests/fixtures/catalog-review.xlsx");
+  await expect(panel.getByLabel("Kategorie 12", { exact: true })).toHaveValue(
+    "Pruefvergehen 12",
+  );
+  await panel
+    .getByRole("button", { name: "Geprüfte Kategorien übernehmen" })
+    .click();
+  const error = panel.getByRole("alert");
+  await expect(error).toBeInViewport();
+  await expect(error).toContainText("Zeile 1");
+  const before = await page.evaluate(
+    () => JSON.parse(localStorage.getItem("teamkasse-demo-v1")!).state,
+  );
+  expect(before.penaltyTypes).toHaveLength(5);
+  expect(before.imports).toHaveLength(0);
+  await panel.getByLabel("Betrag 1", { exact: true }).fill("EUR 5,00");
+  await panel
+    .getByRole("button", { name: "Geprüfte Kategorien übernehmen" })
+    .click();
+  await expect(
+    panel.getByText("Diese Katalogdatei wurde bereits übernommen."),
+  ).toBeVisible();
+  const after = await page.evaluate(
+    () => JSON.parse(localStorage.getItem("teamkasse-demo-v1")!).state,
+  );
+  expect(after.penaltyTypes).toHaveLength(17);
+  expect(
+    after.penaltyTypes.find(
+      (r: { name: string }) => r.name === "Pruefvergehen 1",
+    ).amountCents,
+  ).toBe(500);
+});
+
+test("Katalogübernahme erklärt fehlende Auswahl und nennt doppelte Vorschauzeilen", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await nav(page, "Verwaltung").click();
+  const panel = page.getByRole("region", {
+    name: "Strafenkatalog importieren",
+  });
+  await panel
+    .getByLabel("Katalogdatei auswählen")
+    .setInputFiles("tests/fixtures/catalog-review.xlsx");
+  await expect(panel.getByLabel("Kategorie 12", { exact: true })).toHaveValue(
+    "Pruefvergehen 12",
+  );
+  for (const check of await panel
+    .getByRole("checkbox", { name: "Neue Kategorie übernehmen", exact: true })
+    .all())
+    await check.uncheck();
+  const button = panel.getByRole("button", {
+    name: "Geprüfte Kategorien übernehmen",
+  });
+  await expect(button).toBeDisabled();
+  await expect(panel.getByRole("status")).toContainText(
+    "Bitte mindestens eine Kategorie auswählen",
+  );
+  const checks = panel.getByRole("checkbox", {
+    name: "Neue Kategorie übernehmen",
+    exact: true,
+  });
+  await checks.nth(1).check();
+  await checks.nth(2).check();
+  await panel
+    .getByLabel("Kategorie 3", { exact: true })
+    .fill("Pruefvergehen 2");
+  await button.click();
+  await expect(panel.getByRole("alert")).toContainText(
+    "Zeile 3 (Pruefvergehen 2): Doppelter Kategoriename",
+  );
+  await expect(panel.getByRole("alert")).toBeInViewport();
+  await checks.nth(2).uncheck();
+  await button.click();
+  await expect(
+    panel.getByText("Diese Katalogdatei wurde bereits übernommen."),
+  ).toBeVisible();
+});
+
+test("Katalogübernahme meldet auch einen Speicherfehler und lässt einen erneuten Versuch zu (Fehler injiziert)", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await nav(page, "Verwaltung").click();
+  const panel = page.getByRole("region", {
+    name: "Strafenkatalog importieren",
+  });
+  await panel
+    .getByLabel("Katalogdatei auswählen")
+    .setInputFiles("tests/fixtures/catalog.xlsx");
+  await expect(panel.getByLabel("Kategorie 1", { exact: true })).toHaveValue(
+    "Testvergehen",
+  );
+  // Fault injection in this isolated demo browser exercises a failing command, not only input validation.
+  await page.evaluate(() => {
+    const original = crypto.randomUUID.bind(crypto);
+    let fail = true;
+    Object.defineProperty(crypto, "randomUUID", {
+      configurable: true,
+      value: () => {
+        if (fail) {
+          fail = false;
+          throw new Error("Fiktiver Speicherfehler");
+        }
+        return original();
+      },
+    });
+  });
+  const button = panel.getByRole("button", {
+    name: "Geprüfte Kategorien übernehmen",
+  });
+  await button.click();
+  await expect(panel.getByRole("alert")).toContainText(
+    "Fiktiver Speicherfehler",
+  );
+  await expect(panel.getByRole("alert")).toBeInViewport();
+  await expect(button).toBeEnabled();
+  const before = await page.evaluate(
+    () => JSON.parse(localStorage.getItem("teamkasse-demo-v1")!).state,
+  );
+  expect(before.penaltyTypes).toHaveLength(5);
+  expect(before.imports).toHaveLength(0);
+  await button.click();
+  await expect(
+    panel.getByText("Diese Katalogdatei wurde bereits übernommen."),
+  ).toBeVisible();
+  await expect(panel.getByRole("alert")).toHaveCount(0);
+});
