@@ -36,6 +36,9 @@ export const demoStorageSchema = z.object({
       z.object({
         id,
         teamId: id,
+        category: z.enum(["player", "coach", "staff"]).default("player"),
+        firstName: z.string().max(80).optional(),
+        lastName: z.string().max(80).optional(),
         code: z.string().regex(/^MK-\d{3,6}$/),
         name: z.string(),
         aliases: z.array(z.string()),

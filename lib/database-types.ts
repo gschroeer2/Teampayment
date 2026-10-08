@@ -1,4 +1,4 @@
-import type { Role, PenaltyStatus } from "./types";
+import type { Role, PenaltyStatus, PersonCategory } from "./types";
 /** Result of teamkasse_state. Keep these boundary types in sync with the migration. */
 export interface DatabaseSnapshot {
   drink_consumptions: Array<{
@@ -18,6 +18,9 @@ export interface DatabaseSnapshot {
     team_id: string;
     code: string;
     name: string;
+    category: PersonCategory;
+    first_name: string | null;
+    last_name: string | null;
     aliases: string[];
     active: boolean;
   }>;

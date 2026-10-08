@@ -100,6 +100,60 @@ export function applyCommand(
   };
   let summary = "";
   switch (command.type) {
+    case "importPeople": {
+      if (
+        state.imports.some(
+          (r) => r.source === "people" && r.hash === command.fileHash,
+        )
+      )
+        throw new Error("Personenliste wurde bereits importiert.");
+      const keys = new Set<string>();
+      const key = (name: string) =>
+        name.trim().replace(/\s+/g, " ").toLocaleLowerCase("de-DE");
+      let next =
+        Math.max(0, ...state.players.map((p) => Number(p.code.slice(3)))) + 1;
+      for (const row of command.rows) {
+        const name = `${row.firstName} ${row.lastName}`;
+        if (keys.has(key(name)))
+          throw new Error(
+            "Doppelte Namen im Import. Namensgleiche Personen bitte einzeln anlegen.",
+          );
+        keys.add(key(name));
+        if (row.id) {
+          const person = getPlayer(row.id);
+          if (key(person.name) !== key(name))
+            throw new Error(
+              "Bestehende Person stimmt nicht mit dem importierten Namen überein.",
+            );
+          Object.assign(person, {
+            firstName: row.firstName,
+            lastName: row.lastName,
+            category: row.category,
+          });
+        } else {
+          if (state.players.some((p) => key(p.name) === key(name)))
+            throw new Error(
+              "Person existiert bereits. Vorschau neu erstellen und Zuordnung prüfen.",
+            );
+          if (next > 999999)
+            throw new Error("Keine freie Spieler-ID verfügbar.");
+          state.players.push({
+            id: uuid(),
+            teamId,
+            name,
+            firstName: row.firstName,
+            lastName: row.lastName,
+            category: row.category,
+            code: `MK-${String(next++).padStart(3, "0")}`,
+            aliases: [],
+            active: true,
+          });
+        }
+      }
+      state.imports.push({ source: "people", hash: command.fileHash });
+      summary = `Personenliste importiert: ${command.rows.length} Teammitglieder`;
+      break;
+    }
     case "importPenaltyCatalog": {
       if (
         state.imports.some(
@@ -171,7 +225,14 @@ export function applyCommand(
         )
       )
         throw new Error("Spieler-ID ist bereits vergeben.");
+      const previous = command.id ? getPlayer(command.id) : undefined;
       const player = {
+        ...previous,
+        category: command.category ?? previous?.category ?? "player",
+        firstName:
+          previous?.name === command.name ? previous.firstName : undefined,
+        lastName:
+          previous?.name === command.name ? previous.lastName : undefined,
         id: command.id ?? uuid(),
         teamId,
         name: command.name,
@@ -389,6 +450,8 @@ export function applyCommand(
     case "anonymizePlayer": {
       const player = getPlayer(command.playerId);
       player.name = "Anonymisierter Spieler";
+      delete player.firstName;
+      delete player.lastName;
       player.aliases = [];
       player.active = false;
       for (const penalty of state.penalties.filter(

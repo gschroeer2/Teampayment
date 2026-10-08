@@ -2166,3 +2166,16 @@ textarea {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.import-section fieldset {
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  margin: 16px 0;
+}
+.import-section fieldset:disabled {
+  opacity: 0.65;
+}
+.import-section fieldset .button {
+  margin-top: 12px;
+}

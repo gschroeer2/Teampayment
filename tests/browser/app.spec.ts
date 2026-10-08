@@ -556,3 +556,120 @@ test("Getränkemaske funktioniert ohne API-Schlüssel und Foto-Erkennung ist im 
   await page.getByLabel("Demo-Rolle").selectOption("player");
   await expect(panel).toHaveCount(0);
 });
+
+for (const extension of ["xlsx", "pdf"]) {
+  test(`Personenliste aus ${extension}: Kategorien, Korrektur, bestehende Personen und Dubletten`, async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await nav(page, "Spieler").click();
+    const panel = page.getByRole("region", {
+      name: "Personenliste importieren",
+    });
+    await panel
+      .getByLabel("Personenliste auswählen")
+      .setInputFiles(`tests/fixtures/people.${extension}`);
+    await expect(panel.getByLabel("Vorname 1", { exact: true })).toHaveValue(
+      "Anna",
+    );
+    await expect(panel.getByLabel("Nachname 1", { exact: true })).toHaveValue(
+      "von Test",
+    );
+    await expect(
+      panel.getByLabel("Personenkategorie 1", { exact: true }),
+    ).toHaveValue("coach");
+    await expect(
+      panel.getByLabel("Personenkategorie 2", { exact: true }),
+    ).toHaveValue("staff");
+    await expect(
+      panel.getByLabel("Person 3 übernehmen", { exact: true }),
+    ).not.toBeChecked();
+    await expect(panel.getByText("Bereits vorhanden · MK-001")).toBeVisible();
+    await expect(
+      panel.getByLabel("Person 4 übernehmen", { exact: true }),
+    ).not.toBeChecked();
+    await panel
+      .getByLabel("Personenkategorie 4", { exact: true })
+      .selectOption("player");
+    await panel.getByLabel("Person 4 übernehmen", { exact: true }).check();
+    await panel
+      .getByRole("button", { name: "Ausgewählte Personen übernehmen" })
+      .click();
+    await expect(panel.getByRole("status")).toContainText("bereits übernommen");
+    const overview = page.getByRole("row").filter({ hasText: "Anna von Test" });
+    await expect(overview).toContainText("Trainer");
+    await expect(overview).toContainText("MK-009");
+    await expect(
+      page.getByRole("row").filter({ hasText: "Sam Demo" }),
+    ).toContainText("Betreuer");
+    const saved = await page.evaluate(
+      () => JSON.parse(localStorage.getItem("teamkasse-demo-v1")!).state,
+    );
+    expect(saved.players).toHaveLength(11);
+    expect(
+      saved.players.filter((p: { name: string }) => p.name === "Jonas Weber"),
+    ).toHaveLength(1);
+    expect(
+      saved.players.find((p: { name: string }) => p.name === "Anna von Test"),
+    ).toMatchObject({
+      firstName: "Anna",
+      lastName: "von Test",
+      category: "coach",
+    });
+    await page.reload();
+    await nav(page, "Spieler").click();
+    await expect(
+      page.getByRole("row").filter({ hasText: "Anna von Test" }),
+    ).toContainText("Trainer");
+    await panel
+      .getByLabel("Personenliste auswählen")
+      .setInputFiles(`tests/fixtures/people.${extension}`);
+    await expect(panel.getByRole("status")).toContainText("bereits übernommen");
+    await panel
+      .getByLabel("Personenliste auswählen")
+      .setInputFiles(
+        `tests/fixtures/people.${extension === "xlsx" ? "pdf" : "xlsx"}`,
+      );
+    await expect(
+      panel.getByLabel("Person 1 übernehmen", { exact: true }),
+    ).not.toBeChecked();
+    await expect(panel.getByText("Bereits vorhanden · MK-009")).toBeVisible();
+    await page.getByLabel("Demo-Rolle").selectOption("player");
+    await expect(panel).toHaveCount(0);
+  });
+}
+
+test("Personenkategorie manuell ändern und falsche Importdatei ablehnen", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await nav(page, "Spieler").click();
+  await page
+    .getByRole("button", { name: "Jonas Weber bearbeiten", exact: true })
+    .click();
+  await page
+    .getByRole("dialog")
+    .getByRole("combobox", { name: "Kategorie", exact: true })
+    .selectOption("staff");
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Speichern", exact: true })
+    .click();
+  await expect(
+    page.getByRole("row").filter({ hasText: "Jonas Weber" }),
+  ).toContainText("Betreuer");
+  const panel = page.getByRole("region", { name: "Personenliste importieren" });
+  await panel.getByLabel("Personenliste auswählen").setInputFiles({
+    name: "people.pdf",
+    mimeType: "application/pdf",
+    buffer: Buffer.from("not a PDF"),
+  });
+  await expect(panel.getByText(/Bitte eine echte PDF-/)).toBeVisible();
+  await panel.getByLabel("Personenliste auswählen").setInputFiles({
+    name: "oversized.xlsx",
+    mimeType:
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    buffer: Buffer.alloc(5_000_001),
+  });
+  await expect(panel.getByText(/überschreitet 5 MB/)).toBeVisible();
+});

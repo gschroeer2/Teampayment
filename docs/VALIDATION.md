@@ -8,12 +8,12 @@ Geprüft in der Codex-Cloud mit Node.js 24.19.0, Next.js 16.4.0 und Chromium. Al
 | --------------------------------------------------- | ------------------------------------------------------------ |
 | TypeScript (`npm run typecheck`)                    | Bestanden                                                    |
 | ESLint (`npm run lint`)                             | Bestanden, keine Warnungen                                   |
-| Vitest (`npm test`)                                 | 51 Tests bestanden, keine übersprungen                       |
-| PostgreSQL (`npm run test:db`)                      | 19 Prüfungen bestanden                                       |
+| Vitest (`npm test`)                                 | 60 Tests bestanden, keine übersprungen                       |
+| PostgreSQL (`npm run test:db`)                      | 24 Prüfungen bestanden                                       |
 | Entwicklungsstart (`npm run dev`)                   | Dashboard, Demo-API und interaktive Spielerübersicht geprüft |
 | Wiederholbare Installation (`npm ci`)               | Gespeichertes Installationsskript vollständig ausgeführt     |
 | Produktionsbuild (`npm run build -- --webpack`)     | Bestanden                                                    |
-| Playwright (`npm run test:e2e`)                     | 26 Prüfungen bestanden: 13 Desktop + 13 in iPhone-Größe      |
+| Playwright (`npm run test:e2e`)                     | 32 Prüfungen bestanden: 16 Desktop + 16 in iPhone-Größe      |
 | Produktions-Abhängigkeiten (`npm audit --omit=dev`) | Keine gemeldeten Schwachstellen im geprüften Stand           |
 
 Die Browserprüfungen starten einen eigenen Produktionsserver; sie lesen und verändern Daten, exportieren CSV, prüfen Rollenansichten, Katalogpflege, Konto-Anonymisierung, Rückbuchung und die Offline-Seite. Alle Prüfungen sind abgeschlossen. Während der Entwicklung gescheiterte Prüfungen und ihre Ursachen sind unten dokumentiert.
@@ -64,3 +64,15 @@ Die PostgreSQL-Prüfungen verwenden PGlite mit simuliertem `auth.uid()`. Kein Su
 - Frühere Prüfungen während dieser Erweiterung: TypeScript fand eine falsche Spaltenreferenz sowie eine in PDF.js 6 entfernte Option; beides korrigiert. ESLint prüfte zunächst den generierten, minifizierten PDF-Worker und meldete Fremdcodefehler; dieser wird jetzt explizit von Lint/Formatierung ausgeschlossen. Eine Formatprüfung fand vorübergehend einen falschen Stylesheetinhalt; die Ausgangsstile wurden vollständig wiederhergestellt und die Importstile ergänzt, anschließend im Desktop-/Mobilbrowser geprüft. Das Erzeugen der fiktiven PNG-Testdatei meldete einen nicht beschreibbaren Fontconfig-Cache; die Bilddatei wurde erstellt und erfolgreich in beiden Browsergrößen geladen.
 
 Die echte Bildqualität muss mit einem eingerichteten Supabase-/OpenAI-Konto und einem anonymisierten Beispielfoto validiert werden. Gescannte PDFs, alte XLS-Dateien und HEIC-Fotos sind in dieser Version nicht unterstützt. Es gibt keinen automatischen Forderungseintrag allein durch eine KI-Antwort: erst die ausdrückliche Prüfung/Übernahme bucht die Getränkeforderung.
+
+## Erweiterung: Personenlisten aus XLSX und Text-PDF
+
+- Migration 004 ergänzt getrennte Vor-/Nachnamen und die fachliche Kategorie Spieler/Trainer/Betreuer. Auth-Rollen bleiben separat. Der atomare Import wird für Kassierer/Admin geprüft, serialisiert die Vergabe von MK-IDs und bewahrt bestehende Konten, Spitznamen und Aktivstatus.
+- Gemeinsamer begrenzter XLSX-/PDF-Leser wird für Personen- und Katalogimport verwendet. PDF-Tabellen werden anhand der Überschriftenpositionen gelesen; mehrteilige Nachnamen bleiben erhalten. Keine gescannten PDFs, alten XLS-Dateien oder frei umgebrochenen Tabellen. Dateien bleiben im Browser; nur ausgewählte Personen und Importmetadaten werden gespeichert.
+- Neun neue Vitest-Fälle prüfen Mapping, unbekannte Kategorien, mehrteilige PDF-Namen, eindeutige IDs, Datei-/Namensdubletten, bestehende Identität, Rollen/Teamgrenzen, alte Demo-Daten und Redaktion. Insgesamt 60 Tests bestanden.
+- Fünf zusätzliche Prüfungen im echten PostgreSQL-Motor testen Migration 004, unzugängliche private RPCs, Rollen/Teamgrenzen, Auth-Rollen unabhängig von Personenkategorien, Datei-/Namensdubletten, bestehende Konten und vollständigen Rollback. Die bestehende Anonymisierungsprüfung kontrolliert nun zusätzlich die beiden Namensfelder. Insgesamt 24 Prüfungen bestanden.
+- Der erste Browserlauf bestand 30 von 32 Prüfungen. Die beiden Fälle zur manuellen Kategorieänderung scheiterten am exakten `getByLabel("Kategorie")`-Testselektor für das Auswahlfeld. Die Anwendung zeigte das Feld korrekt; der Test wurde auf dessen zugängliche Combobox-Rolle umgestellt.
+
+- Beim Korrigieren des Selektors wurde vorübergehend auch der Textfeld-Selektor im bestehenden Katalogtest geändert; dieser wurde gezielt wiederhergestellt. Die übrigen 30 Browserprüfungen bestanden in diesem Zwischenlauf.
+
+- Der abschließende vollständige Browserlauf bestand alle 32 Prüfungen (16 Desktop, 16 in iPhone-Größe), einschließlich echter XLSX-/PDF-Dateien, bearbeiteter unbekannter Kategorien, Datei-/dateiübergreifender Dubletten, Persistenz, manueller Kategorieänderung, Rollenansicht sowie Dateityp-/Größenprüfung. TypeScript, ESLint, Formatprüfung und Produktionsbuild mit Webpack bestanden ebenfalls. Die Supabase-Einrichtung in README enthält Migration 004.

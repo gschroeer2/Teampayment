@@ -5,6 +5,7 @@ Eine deutsche, mobile Mannschaftskasse für Amateur-Fußballteams. Erste funktio
 ## Was bereits funktioniert
 
 - Dashboard mit offenen Forderungen, beglichenen Beträgen, Guthaben und aktuellen Vorgängen.
+- Spieler, Trainer und Betreuer aus Excel (.xlsx) oder Text-PDF importieren: getrennte Vor-/Nachnamen, Kategorie, bearbeitbare Vorschau und Dublettenschutz.
 - Spieler hinzufügen, bearbeiten und deaktivieren; eindeutige IDs (`MK-017`), Spitznamen und Namensvarianten.
 - Strafenkatalog mit Centbeträgen, aktivierbaren Kategorien, Erkennungsbegriffen sowie lokalem PDF-/Excel-Import mit Vorschau und Spaltenzuordnung.
 - Getränkelisten als Foto mit optionaler, freigegebener OpenAI-Erkennung und manueller Prüfmaske. Mengen pro Person/Tag, einheitlicher Getränkepreis, Dublettenschutz und gemeinsame Zahlungszuordnung.
@@ -51,7 +52,7 @@ Die PWA wird im Produktionsmodus registriert. Auf dem iPhone über „Teilen →
 
 ## Supabase einrichten
 
-1. Ein Supabase-Projekt erstellen. In dessen SQL-Editor den vollständigen Inhalt von [`supabase/migrations/001_teamkasse.sql`](supabase/migrations/001_teamkasse.sql) ausführen. Anschließend [`supabase/migrations/002_whatsapp_catalog_aliases.sql`](supabase/migrations/002_whatsapp_catalog_aliases.sql) ausführen. Danach [`supabase/migrations/003_catalog_and_drinks.sql`](supabase/migrations/003_catalog_and_drinks.sql) ausführen. Alle Migrationen sind einmalig und müssen in Reihenfolge angewendet werden. Bei einer bestehenden Datenbank nur die noch fehlenden Migrationen ergänzen. Migration 003 sichert eindeutige Kategorienamen pro Team; vorhandene doppelte Namen müssen vor Anwendung nachvollziehbar bereinigt werden.
+1. Ein Supabase-Projekt erstellen. In dessen SQL-Editor den vollständigen Inhalt von [`supabase/migrations/001_teamkasse.sql`](supabase/migrations/001_teamkasse.sql) ausführen. Anschließend [`supabase/migrations/002_whatsapp_catalog_aliases.sql`](supabase/migrations/002_whatsapp_catalog_aliases.sql) ausführen. Danach [`supabase/migrations/003_catalog_and_drinks.sql`](supabase/migrations/003_catalog_and_drinks.sql) ausführen. Zum Schluss [`supabase/migrations/004_people_import.sql`](supabase/migrations/004_people_import.sql) ausführen. Alle Migrationen sind einmalig und müssen in Reihenfolge angewendet werden. Bei einer bestehenden Datenbank nur die noch fehlenden Migrationen ergänzen. Migration 003 sichert eindeutige Kategorienamen pro Team; vorhandene doppelte Namen müssen vor Anwendung nachvollziehbar bereinigt werden.
 2. Für eine **Entwicklungsdatenbank** optional [`supabase/seed.sql`](supabase/seed.sql) ausführen. Die Beispieldaten sind fiktiv, und der Seed ist wiederholbar. In einer produktiven Datenbank zunächst ein eigenes Team als Datenbankbetreiber anlegen:
 
    ```sql
@@ -148,6 +149,28 @@ Prüfergebnisse und behobene Fehler stehen in [`docs/VALIDATION.md`](docs/VALIDA
 - Unter „Spieler“ kann ein Admin ein Konto nach expliziter Texteingabe anonymisieren. Name, Aliasse, Strafgründe, zugehörige Verwendungszwecke und **alle Freitext-Snapshots des Teamprotokolls** werden entfernt; die strukturierte Änderungshistorie bleibt. Spielerzugriff wird entzogen. UUIDs, Spieler-ID, externe Transaktions-IDs und Geldhistorie bleiben zur Nachvollziehbarkeit bestehen. Dies ist Pseudonymisierung/Redaktion, keine vollständige Löschung sämtlicher Daten.
 - Der Betreiber muss anschließend bei Bedarf das betreffende Supabase-Auth-Konto, Auth-Logs, Exporte und Backups behandeln. Gesetzlich oder vereinsrechtlich notwendige Finanzaufbewahrung muss vor Löschung geklärt werden. Es gibt keine pauschale automatische Löschung der Finanzhistorie.
 - Die einstellbare Frist (30–3650 Tage) gilt für importierte Nachrichtenbelege. `purge_expired_import_evidence()` entfernt abgelaufene Belegausschnitte; sie muss über eine vertrauenswürdige tägliche Datenbankaufgabe aufgerufen werden. Sie ist nicht für App-Clients freigegeben. Belegtexte werden grundsätzlich nicht in Audit-Snapshots kopiert. WhatsApp-Belege werden beim Übernehmen einzelner Vorschläge gespeichert. Vollständige Chats werden weder hochgeladen noch dauerhaft gespeichert.
+
+## Personenliste aus Excel oder PDF importieren
+
+Kassierer und Administratoren finden den Import unter **Spieler** und **Importe → Spieler, Trainer & Betreuer importieren**. Eine Liste besteht aus drei Spalten, zum Beispiel:
+
+| Vorname | Nachname     | Kategorie |
+| ------- | ------------ | --------- |
+| Anna    | von Beispiel | Trainer   |
+| Max     | Mustermann   | Spieler   |
+| Sam     | Testperson   | Betreuer  |
+
+1. Datei als **XLSX** oder **PDF mit auswählbarem Text** bereitstellen. Maximal 5 MB und 200 Personen pro Datei. Alte XLS-Dateien vorher als XLSX speichern. Für PDF müssen die Überschriften Vorname, Nachname und Kategorie mit den zugehörigen Zellen als einfache Tabelle angeordnet sein; Fotos/gescannte oder umgebrochene PDF-Tabellen sind nicht unterstützt.
+2. **Personenliste auswählen** anklicken. Bei Excel gegebenenfalls Tabellenblatt, Überschriftenzeile und Zuordnung der drei Spalten ändern und **Personenvorschau erstellen** wählen. Ohne Überschriften die entsprechende Checkbox abwählen. Die erste Zeile wird sonst als Überschrift behandelt.
+3. Namen, Kategorie und Auswahl kontrollieren. Mehrteilige Nachnamen werden als ein Feld übernommen. Die Kategorien Spieler, Trainer, Betreuer und alternativ Staff werden erkannt; unbekannte Kategorien bleiben zur Korrektur offen und zunächst abgewählt.
+4. Bestehende Personen sind zunächst abgewählt. Bei ausdrücklicher Auswahl werden ihre Kategorie sowie die getrennten Namensfelder ergänzt. UUID, MK-ID, Spitznamen, Aktivstatus, Strafen und Zahlungen bleiben erhalten. Bei namensgleichen vorhandenen Personen die passende MK-ID ausdrücklich wählen. Doppelte Namen in derselben Datei nur einmal auswählen; tatsächlich verschiedene namensgleiche Personen können einzeln über „Spieler hinzufügen“ angelegt werden.
+5. **Ausgewählte Personen übernehmen** speichert die Auswahl vollständig oder bei einem Fehler gar nicht. Neue Personen erhalten fortlaufende freie MK-IDs. Dieselbe Dateiprüfsumme ist danach gesperrt; weitere Korrekturen über die Personenverwaltung vornehmen. Bei einer geänderten Datei werden vorhandene Namen erneut abgeglichen.
+
+Die Kategorie erscheint in der Spielerübersicht, ist im Bearbeitungsdialog änderbar und wird im Konto-CSV exportiert. Sie beschreibt eine Aufgabe im Team und vergibt **keine Anmelde- oder Administratorrechte**. Personen können ohne Supabase-Auth-Konto für Getränke, Strafen und Zahlungen verwaltet werden; Konten und Zugriffsrollen werden weiterhin separat zugeordnet.
+
+Die Datei wird im Browser gelesen, nicht hochgeladen oder an OpenAI geschickt. Im Live-Modus werden nur ausgewählte Personen, Dateiprüfsumme und Importprotokoll gespeichert; sämtliche Änderungen werden auditiert. In der Demo werden sie ausschließlich im Browser gespeichert. Der Import braucht keinen API-Schlüssel. Bestehende Namen werden durch Migration 004 nicht automatisch in Vor-/Nachnamen zerlegt. Bei späterer manueller Umbenennung werden getrennte Namen zurückgesetzt, damit keine veralteten Namensdaten verbleiben; Anonymisierung entfernt beide Felder einschließlich der Audit-Snapshots.
+
+Fiktive Testdateien liegen unter [`tests/fixtures/people.xlsx`](tests/fixtures/people.xlsx) und [`tests/fixtures/people.pdf`](tests/fixtures/people.pdf). Sie enthalten absichtlich eine unbekannte Kategorie zum Testen der Korrektur.
 
 ## WhatsApp-Kurzmeldungen ausprobieren
 

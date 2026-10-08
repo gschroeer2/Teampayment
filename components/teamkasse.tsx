@@ -44,6 +44,8 @@ import { createDemo } from "@/lib/demo";
 import { makeCsv, downloadFile } from "@/lib/csv";
 import Link from "next/link";
 import { signOut } from "@/app/login/actions";
+import { PeopleImport } from "./people-import";
+import { personCategoryLabels } from "@/lib/types";
 import { CatalogImport } from "./catalog-import";
 import { DrinksImport } from "./drinks-import";
 import { WhatsAppImport } from "./whatsapp-import";
@@ -315,6 +317,9 @@ export default function TeamKasse({
               [
                 "Spieler-ID",
                 "Name",
+                "Vorname",
+                "Nachname",
+                "Kategorie",
                 "Bestätigte Forderungen EUR",
                 "Zugeordnete Zahlungen EUR",
                 "Offen EUR",
@@ -325,6 +330,9 @@ export default function TeamKasse({
                 return [
                   p.code,
                   p.name,
+                  p.firstName ?? "",
+                  p.lastName ?? "",
+                  personCategoryLabels[p.category ?? "player"],
                   ...[b.charged, b.paid, b.open, b.credit].map((v) =>
                     (v / 100).toFixed(2),
                   ),
@@ -768,104 +776,123 @@ export default function TeamKasse({
             </>
           )}
           {tab === "players" && (
-            <section className="panel">
-              <div className="panel-heading">
-                <div>
-                  <h2>
-                    Spielerübersicht{" "}
-                    <span className="count-pill">{state.players.length}</span>
-                  </h2>
-                  <p>Kontostände berücksichtigen die gesamte Historie.</p>
+            <>
+              <section className="panel">
+                <div className="panel-heading">
+                  <div>
+                    <h2>
+                      Spielerübersicht{" "}
+                      <span className="count-pill">{state.players.length}</span>
+                    </h2>
+                    <p>
+                      Spieler, Trainer und Betreuer. Kontostände berücksichtigen
+                      die gesamte Historie.
+                    </p>
+                  </div>
+                  <label className="search-field">
+                    <Search size={17} />
+                    <input
+                      aria-label="Spieler suchen"
+                      placeholder="Name oder Spieler-ID suchen"
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                    />
+                  </label>
                 </div>
-                <label className="search-field">
-                  <Search size={17} />
-                  <input
-                    aria-label="Spieler suchen"
-                    placeholder="Name oder Spieler-ID suchen"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                  />
-                </label>
-              </div>
-              <div className="table-scroll">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Spieler</th>
-                      <th>Spieler-ID</th>
-                      <th>Offen</th>
-                      <th>Guthaben</th>
-                      <th>Status</th>
-                      <th>
-                        <span className="sr-only">Bearbeiten</span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredPlayers.map((p, i) => {
-                      const b = playerBalance(state, p.id);
-                      return (
-                        <tr key={p.id}>
-                          <td>
-                            <div className="person-row">
-                              <Avatar name={p.name} index={i} />
-                              <span>
-                                <strong>{p.name}</strong>
-                                <small>
-                                  {p.aliases.length
-                                    ? p.aliases.join(", ")
-                                    : "Kein Spitzname"}
-                                </small>
+                <div className="table-scroll">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Spieler</th>
+                        <th>Spieler-ID</th>
+                        <th>Kategorie</th>
+                        <th>Offen</th>
+                        <th>Guthaben</th>
+                        <th>Status</th>
+                        <th>
+                          <span className="sr-only">Bearbeiten</span>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredPlayers.map((p, i) => {
+                        const b = playerBalance(state, p.id);
+                        return (
+                          <tr key={p.id}>
+                            <td>
+                              <div className="person-row">
+                                <Avatar name={p.name} index={i} />
+                                <span>
+                                  <strong>{p.name}</strong>
+                                  <small>
+                                    {p.aliases.length
+                                      ? p.aliases.join(", ")
+                                      : "Kein Spitzname"}
+                                  </small>
+                                </span>
+                              </div>
+                            </td>
+                            <td>
+                              <code>{p.code}</code>
+                            </td>
+                            <td>
+                              <span className="badge gray">
+                                {personCategoryLabels[p.category ?? "player"]}
                               </span>
-                            </div>
-                          </td>
-                          <td>
-                            <code>{p.code}</code>
-                          </td>
-                          <td className={`money ${b.open ? "" : "text-green"}`}>
-                            {euros(b.open)}
-                          </td>
-                          <td className="money text-green">
-                            {euros(b.credit)}
-                          </td>
-                          <td>
-                            <span
-                              className={`badge ${p.active ? "green" : "gray"}`}
+                            </td>
+                            <td
+                              className={`money ${b.open ? "" : "text-green"}`}
                             >
-                              <span className="dot" />
-                              {p.active ? "Aktiv" : "Deaktiviert"}
-                            </span>
-                          </td>
-                          <td>
-                            {admin && (
+                              {euros(b.open)}
+                            </td>
+                            <td className="money text-green">
+                              {euros(b.credit)}
+                            </td>
+                            <td>
+                              <span
+                                className={`badge ${p.active ? "green" : "gray"}`}
+                              >
+                                <span className="dot" />
+                                {p.active ? "Aktiv" : "Deaktiviert"}
+                              </span>
+                            </td>
+                            <td>
+                              {admin && (
+                                <IconButton
+                                  label={`${p.name} anonymisieren`}
+                                  onClick={() =>
+                                    open({ kind: "privacy", player: p })
+                                  }
+                                >
+                                  <ShieldCheck size={17} />
+                                </IconButton>
+                              )}
                               <IconButton
-                                label={`${p.name} anonymisieren`}
+                                label={`${p.name} bearbeiten`}
                                 onClick={() =>
-                                  open({ kind: "privacy", player: p })
+                                  open({ kind: "player", player: p })
                                 }
                               >
-                                <ShieldCheck size={17} />
+                                <MoreHorizontal size={20} />
                               </IconButton>
-                            )}
-                            <IconButton
-                              label={`${p.name} bearbeiten`}
-                              onClick={() =>
-                                open({ kind: "player", player: p })
-                              }
-                            >
-                              <MoreHorizontal size={20} />
-                            </IconButton>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-                {!filteredPlayers.length && (
-                  <Empty text="Keine passenden Spieler gefunden." />
-                )}
-              </div>
-            </section>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  {!filteredPlayers.length && (
+                    <Empty text="Keine passenden Spieler gefunden." />
+                  )}
+                </div>
+              </section>
+              <PeopleImport
+                state={state}
+                busy={busy}
+                error={error}
+                onSubmit={execute}
+              />
+            </>
           )}
           {tab === "penalties" && (
             <>
@@ -1032,6 +1059,12 @@ export default function TeamKasse({
                   </p>
                 </div>
               </div>
+              <PeopleImport
+                state={state}
+                busy={busy}
+                error={error}
+                onSubmit={execute}
+              />
               <WhatsAppImport
                 state={state}
                 busy={busy}
@@ -1424,6 +1457,7 @@ function EntryDialog({
             type: "savePlayer",
             ...(modal.player ? { id: modal.player.id } : {}),
             name: str("name"),
+            category: str("category") as "player" | "coach" | "staff",
             code: str("code"),
             aliases: str("aliases")
               .split(",")
@@ -1548,6 +1582,19 @@ function EntryDialog({
                 defaultValue={modal.player?.name}
                 placeholder="Vor- und Nachname"
               />
+            </label>
+            <label>
+              Kategorie
+              <select
+                name="category"
+                defaultValue={modal.player?.category ?? "player"}
+              >
+                {Object.entries(personCategoryLabels).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
             </label>
             <label>
               Spieler-ID

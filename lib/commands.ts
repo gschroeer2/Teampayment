@@ -16,7 +16,29 @@ const catalogEntry = z.object({
   amountCents: amount,
   active: z.boolean(),
 });
+export const personCategorySchema = z.enum(["player", "coach", "staff"]);
+const personName = z.string().trim().min(1).max(80);
 export const commandSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("importPeople"),
+    fileHash: z.string().regex(/^[a-f0-9]{64}$/),
+    rows: z
+      .array(
+        z
+          .object({
+            id: id.optional(),
+            firstName: personName,
+            lastName: personName,
+            category: personCategorySchema,
+          })
+          .refine(
+            (r) => `${r.firstName} ${r.lastName}`.length <= 100,
+            "Name ist zu lang",
+          ),
+      )
+      .min(1)
+      .max(200),
+  }),
   z.object({
     type: z.literal("importPenaltyCatalog"),
     fileHash: z.string().regex(/^[a-f0-9]{64}$/),
@@ -49,6 +71,7 @@ export const commandSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("savePlayer"),
     id: id.optional(),
+    category: personCategorySchema.optional(),
     name,
     code: z
       .string()

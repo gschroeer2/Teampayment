@@ -63,6 +63,12 @@ try {
     ),
   );
   await db.exec(
+    await readFile(
+      new URL("../supabase/migrations/004_people_import.sql", import.meta.url),
+      "utf8",
+    ),
+  );
+  await db.exec(
     await readFile(new URL("../supabase/seed.sql", import.meta.url), "utf8"),
   );
   await db.exec(
@@ -648,6 +654,175 @@ try {
       );
     },
   );
+  const peopleBatch = {
+    type: "importPeople",
+    fileHash: "a".repeat(64),
+    rows: [
+      { firstName: "Anna", lastName: "von Test", category: "coach" },
+      { firstName: "Sam", lastName: "Demo", category: "staff" },
+    ],
+  };
+  await check(
+    "people import requires manager and rejects cross-team access and private RPC calls",
+    async () => {
+      await assert.rejects(command(ids.player, peopleBatch));
+      await assert.rejects(command(ids.outsider, peopleBatch));
+      await assert.rejects(command(ids.cashier, peopleBatch, ids.team2));
+      await assert.rejects(
+        as(ids.cashier, "select private.teamkasse_command_v3($1,$2::jsonb)", [
+          ids.team,
+          JSON.stringify(peopleBatch),
+        ]),
+      );
+    },
+  );
+  await check(
+    "people import generates IDs, preserves categories and creates no memberships",
+    async () => {
+      const before = (
+        await db.query("select count(*)::int n from public.memberships")
+      ).rows[0].n;
+      await command(ids.cashier, peopleBatch);
+      const rows = (
+        await db.query(
+          "select * from public.players where team_id=$1 and name in ('Anna von Test','Sam Demo') order by code",
+          [ids.team],
+        )
+      ).rows;
+      assert.equal(rows.length, 2);
+      assert.equal(rows[0].first_name, "Anna");
+      assert.equal(rows[0].last_name, "von Test");
+      assert.equal(rows[0].category, "coach");
+      assert.equal(rows[1].category, "staff");
+      assert.notEqual(rows[0].code, rows[1].code);
+      assert.equal(
+        (await db.query("select count(*)::int n from public.memberships"))
+          .rows[0].n,
+        before,
+      );
+      assert.equal(
+        (
+          await as(
+            ids.player,
+            "select * from public.players where category in ('coach','staff')",
+          )
+        ).rows.length,
+        0,
+      );
+    },
+  );
+  await check(
+    "people import blocks repeated files, changed-file duplicates and duplicate names",
+    async () => {
+      await assert.rejects(command(ids.admin, peopleBatch));
+      await assert.rejects(
+        command(ids.admin, { ...peopleBatch, fileHash: "b".repeat(64) }),
+      );
+      await assert.rejects(
+        command(ids.admin, {
+          ...peopleBatch,
+          fileHash: "c".repeat(64),
+          rows: [
+            { firstName: "Dup", lastName: "Test", category: "player" },
+            { firstName: "Dup", lastName: "Test", category: "coach" },
+          ],
+        }),
+      );
+      assert.equal(
+        (
+          await db.query(
+            "select count(*)::int n from public.players where name='Dup Test'",
+          )
+        ).rows[0].n,
+        0,
+      );
+    },
+  );
+  await check(
+    "people import updates explicit person only and preserves financial identity",
+    async () => {
+      const p = (
+        await db.query("select * from public.players where id=$1", [ids.p1])
+      ).rows[0];
+      const [firstName, ...rest] = p.name.split(" ");
+      await command(ids.cashier, {
+        ...peopleBatch,
+        fileHash: "d".repeat(64),
+        rows: [
+          { id: p.id, firstName, lastName: rest.join(" "), category: "coach" },
+        ],
+      });
+      const result = (
+        await db.query("select * from public.players where id=$1", [ids.p1])
+      ).rows[0];
+      assert.equal(result.id, p.id);
+      assert.equal(result.code, p.code);
+      assert.equal(result.active, p.active);
+      assert.deepEqual(result.aliases, p.aliases);
+      assert.equal(result.category, "coach");
+      assert.equal(result.first_name, firstName);
+      await assert.rejects(
+        command(ids.cashier, {
+          ...peopleBatch,
+          fileHash: "e".repeat(64),
+          rows: [
+            {
+              id: ids.foreign,
+              firstName: "Other",
+              lastName: "Team",
+              category: "staff",
+            },
+          ],
+        }),
+      );
+      await assert.rejects(
+        command(ids.cashier, {
+          ...peopleBatch,
+          fileHash: "e".repeat(64),
+          rows: [
+            {
+              id: p.id,
+              firstName: "Wrong",
+              lastName: "Person",
+              category: "staff",
+            },
+          ],
+        }),
+      );
+    },
+  );
+  await check(
+    "invalid people rows roll back all persons and import metadata",
+    async () => {
+      await assert.rejects(
+        command(ids.admin, {
+          ...peopleBatch,
+          fileHash: "f".repeat(64),
+          rows: [
+            { firstName: "Rollback", lastName: "Person", category: "player" },
+            { firstName: "Invalid", lastName: "Category", category: "admin" },
+          ],
+        }),
+      );
+      assert.equal(
+        (
+          await db.query(
+            "select count(*)::int n from public.players where name='Rollback Person'",
+          )
+        ).rows[0].n,
+        0,
+      );
+      assert.equal(
+        (
+          await db.query(
+            "select count(*)::int n from public.import_batches where source='people' and file_hash=$1",
+            ["f".repeat(64)],
+          )
+        ).rows[0].n,
+        0,
+      );
+    },
+  );
   await check(
     "anonymization requires admin, scrubs personal text and revokes linked player access",
     async () => {
@@ -667,6 +842,8 @@ try {
         await db.query("select * from public.players where id=$1", [ids.p1])
       ).rows[0];
       assert.equal(p.name, "Anonymisierter Spieler");
+      assert.equal(p.first_name, null);
+      assert.equal(p.last_name, null);
       assert.equal(p.active, false);
       assert.deepEqual(p.aliases, []);
       assert.equal(

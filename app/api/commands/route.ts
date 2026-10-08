@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: duplicate
-            ? "Spieler-ID, Konto-Zuordnung, Transaktion WhatsApp-Nachricht, Kategorie oder Getränkezelle ist bereits vorhanden."
+            ? "Spieler-ID, Konto-Zuordnung, Transaktion, WhatsApp-Nachricht, Importdatei, Kategorie oder Getränkezelle ist bereits vorhanden."
             : "Änderung nicht möglich. Zuordnung, Status und Beträge prüfen.",
         },
         { status: error.code === "42501" ? 403 : 409 },

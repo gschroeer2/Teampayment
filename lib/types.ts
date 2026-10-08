@@ -1,3 +1,9 @@
+export type PersonCategory = "player" | "coach" | "staff";
+export const personCategoryLabels = {
+  player: "Spieler",
+  coach: "Trainer",
+  staff: "Betreuer",
+};
 export type Role = "player" | "cashier" | "admin";
 export type PenaltyStatus = "proposed" | "confirmed" | "rejected" | "cancelled";
 export interface Team {
@@ -12,6 +18,9 @@ export interface Player {
   name: string;
   aliases: string[];
   active: boolean;
+  category?: PersonCategory;
+  firstName?: string;
+  lastName?: string;
 }
 export interface PenaltyType {
   id: string;
