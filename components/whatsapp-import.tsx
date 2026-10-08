@@ -1,11 +1,12 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { FileUp } from "lucide-react";
 import type { AppState } from "@/lib/types";
 import type { Command } from "@/lib/commands";
 import { euros } from "@/lib/ledger";
 import {
   penaltyCandidates,
+  validateWhatsAppPeriod,
   type PenaltyCandidate,
 } from "@/lib/imports/whatsapp";
 
@@ -24,6 +25,24 @@ export function WhatsAppImport({
   const [reading, setReading] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [fileError, setFileError] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [fileName, setFileName] = useState("");
+  const selectedFile = useRef<File | null>(null);
+  const period = { from: from || undefined, to: to || undefined };
+  let periodError = "";
+  try {
+    validateWhatsAppPeriod(period);
+  } catch (e) {
+    periodError = e instanceof Error ? e.message : "Ungültiger Zeitraum.";
+  }
+  function changePeriod(bound: "from" | "to", value: string) {
+    if (bound === "from") setFrom(value);
+    else setTo(value);
+    setCandidates([]);
+    setFeedback("");
+    setFileError("");
+  }
   const known = new Set(
     state.penalties.flatMap((p) => (p.sourceHash ? [p.sourceHash] : [])),
   );
@@ -35,6 +54,7 @@ export function WhatsAppImport({
     setFeedback("");
     setReading(true);
     try {
+      validateWhatsAppPeriod(period);
       if (
         !/\.txt$/i.test(file.name) ||
         (file.type &&
@@ -54,12 +74,13 @@ export function WhatsAppImport({
         state.players,
         known,
         state.penaltyTypes,
+        period,
       );
       setCandidates(result.slice(0, 500));
       setFeedback(
         result.length
-          ? `${result.length} neue mögliche Strafmeldungen erkannt.${result.length > 500 ? " Es werden die ersten 500 angezeigt; bitte kleinere Exporte verwenden." : ""}`
-          : "Keine neuen möglichen Strafmeldungen gefunden. Bereits übernommene Nachrichten werden übersprungen.",
+          ? `${result.length} neue mögliche Strafmeldungen im gewählten Zeitraum erkannt.${result.length > 500 ? " Es werden die ersten 500 angezeigt; bitte den Zeitraum verkleinern." : ""}`
+          : "Keine neuen möglichen Strafmeldungen im gewählten Zeitraum gefunden. Bereits übernommene Nachrichten werden übersprungen.",
       );
     } catch (e) {
       setFileError(
@@ -84,6 +105,33 @@ export function WhatsAppImport({
         dem Katalog. Verbindliche Strafen entstehen erst nach Bestätigung unter
         „Strafen“.
       </p>
+      <div className="whatsapp-fields">
+        <label>
+          Zeitraum von
+          <input
+            type="date"
+            value={from}
+            max={to || undefined}
+            disabled={busy || reading}
+            onChange={(e) => changePeriod("from", e.target.value)}
+          />
+        </label>
+        <label>
+          Zeitraum bis
+          <input
+            type="date"
+            value={to}
+            min={from || undefined}
+            disabled={busy || reading}
+            onChange={(e) => changePeriod("to", e.target.value)}
+          />
+        </label>
+      </div>
+      <p className="form-hint">
+        Von und Bis schließen den jeweiligen Tag vollständig ein. Leere Felder
+        lassen den Zeitraum offen. Es zählt das Nachrichtendatum im Chat;
+        bereits gespeicherte Strafen bleiben bestehen.
+      </p>
       <label className="whatsapp-upload">
         WhatsApp-TXT auswählen
         <input
@@ -91,11 +139,31 @@ export function WhatsAppImport({
           accept=".txt,text/plain"
           disabled={busy || reading}
           onChange={(e) => {
-            void read(e.target.files?.[0]);
+            const file = e.target.files?.[0];
+            if (file) {
+              selectedFile.current = file;
+              setFileName(file.name);
+              void read(file);
+            }
             e.target.value = "";
           }}
         />
       </label>
+      {fileName && (
+        <div className="whatsapp-save">
+          <span>Ausgewählte Datei: {fileName}</span>
+          <button
+            type="button"
+            className="button secondary"
+            disabled={busy || reading || !!periodError}
+            onClick={() => {
+              if (selectedFile.current) void read(selectedFile.current);
+            }}
+          >
+            Zeitraum anwenden
+          </button>
+        </div>
+      )}
       <p className="form-hint">
         Maximal 2 MB, UTF-8. Der Chat wird lokal im Browser verarbeitet und
         nicht vollständig gespeichert. Nur der Beleg eines übernommenen
@@ -103,9 +171,9 @@ export function WhatsAppImport({
       </p>
       {reading && <p role="status">Nachrichten werden geprüft …</p>}
       {feedback && <p role="status">{feedback}</p>}
-      {(fileError || error) && (
+      {(periodError || fileError || error) && (
         <p className="form-error" role="alert">
-          {fileError || error}
+          {periodError || fileError || error}
         </p>
       )}
       {remaining.map((candidate) => (
@@ -127,6 +195,8 @@ export function WhatsAppImport({
           onClick={() => {
             setCandidates([]);
             setFeedback("");
+            setFileName("");
+            selectedFile.current = null;
           }}
         >
           Vorschau verwerfen

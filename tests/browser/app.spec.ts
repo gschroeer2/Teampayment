@@ -326,3 +326,62 @@ test("WhatsApp-Import weist ungültige Dateien zurück und lässt unklare Spiele
     page.getByRole("button", { name: "Als Vorschlag übernehmen" }),
   ).toHaveCount(0);
 });
+
+test("WhatsApp-Zeitraum filtert den gesamten Export und entfernt veraltete Vorschauen", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await nav(page, "Importe").click();
+  await page.getByLabel("Zeitraum von").fill("2026-10-01");
+  await page.getByLabel("Zeitraum bis").fill("2026-10-08");
+  await page.getByLabel("WhatsApp-TXT auswählen").setInputFiles({
+    name: "gesamter-chat.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from(
+      [
+        "[30.09.2026, 23:59:59] Trainer: Jo Kronkorken",
+        "01.10.26, 00:00 - Trainer: Jo Deckel",
+        "[08.10.2026, 23:59:59] Trainer: Jo Bierdeckel",
+        "09.10.26, 00:00 - Trainer: Jo Deckel",
+      ].join("\n"),
+    ),
+  });
+  const proposals = page.getByRole("form", { name: /^Strafenvorschlag:/ });
+  await expect(proposals).toHaveCount(2);
+  await expect(proposals.nth(0)).toContainText("2026-10-01");
+  await expect(proposals.nth(1)).toContainText("2026-10-08");
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth > window.innerWidth,
+    ),
+  ).toBe(false);
+  await page.getByLabel("Zeitraum von").fill("2026-10-08");
+  await expect(proposals).toHaveCount(0);
+  await page.getByRole("button", { name: "Zeitraum anwenden" }).click();
+  await expect(proposals).toHaveCount(1);
+  await expect(proposals).toContainText("Jo Bierdeckel");
+  await page.getByLabel("Zeitraum von").fill("2026-10-09");
+  await expect(proposals).toHaveCount(0);
+  await expect(
+    page.getByRole("alert").filter({ hasText: "Von-Datum" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Zeitraum anwenden" }),
+  ).toBeDisabled();
+  await page.getByLabel("Zeitraum von").fill("2026-10-08");
+  await page.getByRole("button", { name: "Zeitraum anwenden" }).click();
+  await expect(proposals).toHaveCount(1);
+  await proposals
+    .getByRole("button", { name: "Als Vorschlag übernehmen" })
+    .click();
+  await expect(
+    page.getByText("Alle angezeigten Vorschläge wurden übernommen."),
+  ).toBeVisible();
+  await page.getByLabel("Zeitraum von").fill("");
+  await page.getByLabel("Zeitraum bis").fill("");
+  await page.getByRole("button", { name: "Zeitraum anwenden" }).click();
+  await expect(proposals).toHaveCount(3);
+  await expect(
+    page.getByRole("form", { name: "Strafenvorschlag: Jo Bierdeckel" }),
+  ).toHaveCount(0);
+});

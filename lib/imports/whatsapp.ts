@@ -1,5 +1,6 @@
 import type { PenaltyType, Player } from "../types";
 import { identifyPlayer, normalizeName } from "../ledger";
+import { dateSchema } from "../commands";
 import { fingerprint, importDate } from "./csv";
 export interface ChatMessage {
   date: string;
@@ -69,17 +70,39 @@ export interface PenaltyCandidate {
   source: "whatsapp";
 }
 
+export interface WhatsAppPeriod {
+  from?: string;
+  to?: string;
+}
+
+/** Calendar dates from the export; both boundary days are included, without timezone conversion. */
+export function validateWhatsAppPeriod(period: WhatsAppPeriod) {
+  for (const value of [period.from, period.to]) {
+    if (value !== undefined && !dateSchema.safeParse(value).success)
+      throw new Error("Bitte gültige Datumsangaben für den Zeitraum eingeben.");
+  }
+  if (period.from && period.to && period.from > period.to)
+    throw new Error("Das Von-Datum darf nicht nach dem Bis-Datum liegen.");
+}
+
 /** Exact normalized words/phrases only: no guessed players, amounts or fuzzy matches. */
 export async function penaltyCandidates(
   text: string,
   players: Player[],
   knownKeys: ReadonlySet<string> = new Set(),
   catalog: PenaltyType[] = [],
+  period: WhatsAppPeriod = {},
 ): Promise<PenaltyCandidate[]> {
+  validateWhatsAppPeriod(period);
   const messages = await parseWhatsApp(text);
   const seen = new Set(knownKeys);
   const candidates: PenaltyCandidate[] = [];
   for (const m of messages) {
+    if (
+      (period.from && m.date < period.from) ||
+      (period.to && m.date > period.to)
+    )
+      continue;
     if (seen.has(m.key)) continue;
     seen.add(m.key);
     if (

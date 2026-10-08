@@ -4,17 +4,17 @@ Geprüft in der Codex-Cloud mit Node.js 24.19.0, Next.js 16.4.0 und Chromium. Al
 
 ## Abschließende Ergebnisse
 
-| Prüfung                                             | Ergebnis                                                     |
-| --------------------------------------------------- | ------------------------------------------------------------ |
-| TypeScript (`npm run typecheck`)                    | Bestanden                                                    |
-| ESLint (`npm run lint`)                             | Bestanden, keine Warnungen                                   |
-| Vitest (`npm test`)                                 | 33 Tests bestanden, keine übersprungen                       |
-| PostgreSQL (`npm run test:db`)                      | 16 Prüfungen bestanden                                       |
-| Entwicklungsstart (`npm run dev`)                   | Dashboard, Demo-API und interaktive Spielerübersicht geprüft |
-| Wiederholbare Installation (`npm ci`)               | Gespeichertes Installationsskript vollständig ausgeführt     |
-| Produktionsbuild (`npm run build`)                  | Bestanden                                                    |
-| Playwright (`npm run test:e2e`)                     | 16 unterschiedliche Prüfungen bestanden: 8 Desktop + 8 iPhone-Größe           |
-| Produktions-Abhängigkeiten (`npm audit --omit=dev`) | Keine gemeldeten Schwachstellen im geprüften Stand           |
+| Prüfung                                             | Ergebnis                                                                                      |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| TypeScript (`npm run typecheck`)                    | Bestanden                                                                                     |
+| ESLint (`npm run lint`)                             | Bestanden, keine Warnungen                                                                    |
+| Vitest (`npm test`)                                 | 37 Tests bestanden, keine übersprungen                                                        |
+| PostgreSQL (`npm run test:db`)                      | 16 Prüfungen bestanden                                                                        |
+| Entwicklungsstart (`npm run dev`)                   | Dashboard, Demo-API und interaktive Spielerübersicht geprüft                                  |
+| Wiederholbare Installation (`npm ci`)               | Gespeichertes Installationsskript vollständig ausgeführt                                      |
+| Produktionsbuild (`npm run build -- --webpack`)     | Bestanden                                                                                     |
+| Playwright (`npm run test:e2e`)                     | 6 aktuelle WhatsApp-Prüfungen bestanden; 12 übrige Browserfälle im vorherigen Stand bestanden |
+| Produktions-Abhängigkeiten (`npm audit --omit=dev`) | Keine gemeldeten Schwachstellen im geprüften Stand                                            |
 
 Die Browserprüfungen starten einen eigenen Produktionsserver; sie lesen und verändern Daten, exportieren CSV, prüfen Rollenansichten, Katalogpflege, Konto-Anonymisierung, Rückbuchung und die Offline-Seite. Alle Prüfungen sind abgeschlossen. Während der Entwicklung gescheiterte Prüfungen und ihre Ursachen sind unten dokumentiert.
 
@@ -44,3 +44,12 @@ Die PostgreSQL-Prüfungen verwenden PGlite mit simuliertem `auth.uid()`. Kein Su
 - Der erste Browserlauf bestand 14 von 16 Prüfungen. Zwei Uploadprüfungen scheiterten am Testselektor `getByRole("alert")`, der auch den internen Next.js-Routenansager traf. Nach Begrenzung auf die konkrete Fehlermeldung bestanden alle vier WhatsApp-Prüfungen auf Desktop und in iPhone-Größe. Die übrigen zwölf hatten bereits bestanden.
 - Eine zusätzliche gezielte ESLint-Prüfung wurde versehentlich im Export-Checkout ohne installierte Pakete gestartet und scheiterte am nicht beschreibbaren npm-Cache. Die Wiederholung nutzt die vorhandene Installation im tatsächlichen Projektordner.
 - TypeScript, ESLint, 33 Vitest-Fälle, 16 PostgreSQL-Prüfungen und Produktionsbuild bestanden. Ein zusätzlicher TypeScript-Lauf nach den letzten Änderungen bestand ebenfalls.
+
+## Erweiterung: Zeitraum im WhatsApp-Import
+
+- Bearbeitbare Von-/Bis-Datumsfelder vor und nach dem Upload; beide Kalendertage vollständig inklusive. Leere Grenzen bleiben offen. Das Datum stammt direkt aus dem Export, ohne Zeitzonenumrechnung.
+- Filterung erfolgt vor Erkennung und Vorschlagslimit. Datumsänderungen entfernen die alte Vorschau; „Zeitraum anwenden“ liest dieselbe lokal gewählte Datei erneut. Gespeicherte Strafen und stabile Nachrichten-Hashes bleiben unverändert.
+- Vier zusätzliche Fachtests prüfen inklusive Grenzen bis 23:59:59, einen einzelnen Tag, offene Grenzen, einen leeren Zeitraum, ungültige Daten, umgekehrte Grenzen und Dublettenschutz über Zeitraumwechsel hinweg. Alle 37 Vitest-Fälle bestanden.
+- Alle sechs WhatsApp-Browserprüfungen bestanden auf Desktop und in iPhone-Größe, einschließlich des neuen Ablaufs mit vollständigem Chat, Änderung und erneuter Anwendung des Zeitraums, gesperrtem ungültigem Zeitraum und Übernahme nur zulässiger Vorschläge. Keine neuen Datenbankmigrationen oder Änderungen an der Zahlungslogik.
+- ESLint und separate TypeScript-Prüfung bestanden. Der normale Turbopack-Build scheiterte in der aktuellen Sandbox an einem gesperrten internen Port; auch die erste Wiederholung mit erweiterten Rechten scheiterte daran. Ein Webpack-Build innerhalb der Sandbox scheiterte beim TypeScript-Unterprozess (`--showConfig`); mit erweiterten Ausführungsrechten bestand `npm run build -- --webpack` vollständig. Das Projekt-Buildskript bleibt unverändert; die Alternative ist eine Verifikationsmöglichkeit für diese Cloud-Umgebung.
+- Git-Zugriff und lokaler Browser-Testserver benötigten in der aktuellen Sandbox erweiterte Ausführungsrechte. Abruf und Browserprüfungen waren damit erfolgreich.

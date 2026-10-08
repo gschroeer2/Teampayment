@@ -164,3 +164,74 @@ describe("WhatsApp-Kurzformen und Katalogbeträge", () => {
     ).toEqual([]);
   });
 });
+
+describe("WhatsApp-Importzeitraum", () => {
+  const text = [
+    "[30.09.2026, 23:59:59] Trainer: Jo Kronkorken",
+    "01.10.26, 00:00 - Trainer: Jo Deckel",
+    "[08.10.2026, 23:59:59] Trainer: Jo Bierdeckel",
+    "09.10.26, 00:00 - Trainer: Jo Deckel",
+  ].join("\n");
+  const inPeriod = (
+    period: { from?: string; to?: string },
+    known = new Set<string>(),
+  ) => penaltyCandidates(text, demo.players, known, catalog, period);
+
+  it("berücksichtigt beide Grenztage vollständig und lässt ältere/spätere Nachrichten aus", async () => {
+    const result = await inPeriod({ from: "2026-10-01", to: "2026-10-08" });
+    expect(result.map((c) => c.date)).toEqual(["2026-10-01", "2026-10-08"]);
+    expect(result.map((c) => c.excerpt)).toEqual([
+      "Jo Deckel",
+      "Jo Bierdeckel",
+    ]);
+    expect(
+      (await inPeriod({ from: "2026-10-08", to: "2026-10-08" })).map(
+        (c) => c.date,
+      ),
+    ).toEqual(["2026-10-08"]);
+  });
+  it("erlaubt offene Grenzen und ohne Grenzen den gesamten Export", async () => {
+    expect((await inPeriod({ from: "2026-10-08" })).map((c) => c.date)).toEqual(
+      ["2026-10-08", "2026-10-09"],
+    );
+    expect((await inPeriod({ to: "2026-10-01" })).map((c) => c.date)).toEqual([
+      "2026-09-30",
+      "2026-10-01",
+    ]);
+    expect(await inPeriod({})).toHaveLength(4);
+    expect(await inPeriod({ from: "2027-01-01" })).toEqual([]);
+  });
+  it("weist umgekehrte Grenzen und unmögliche Datumswerte zurück", async () => {
+    await expect(
+      inPeriod({ from: "2026-10-09", to: "2026-10-01" }),
+    ).rejects.toThrow("Von-Datum");
+    for (const invalid of ["2026-02-30", "2026-13-01", "08.10.2026", ""])
+      await expect(inPeriod({ from: invalid })).rejects.toThrow(
+        "gültige Datumsangaben",
+      );
+  });
+  it("behält stabile Nachrichten-Hashes bei Zeitraumwechseln und sperrt nur übernommene Nachrichten", async () => {
+    const all = await inPeriod({});
+    const selected = await inPeriod({ from: "2026-10-01", to: "2026-10-08" });
+    expect(selected.map((c) => c.key)).toEqual(
+      all.slice(1, 3).map((c) => c.key),
+    );
+    const state = applyCommand(demo, {
+      type: "addWhatsAppProposal",
+      playerId: selected[0].playerId!,
+      typeId: selected[0].typeId!,
+      date: selected[0].date,
+      messageKey: selected[0].key,
+      excerpt: selected[0].excerpt,
+    });
+    const known = new Set(
+      state.penalties.flatMap((p) => (p.sourceHash ? [p.sourceHash] : [])),
+    );
+    const remaining = await inPeriod({}, known);
+    expect(remaining.map((c) => c.date)).toEqual([
+      "2026-09-30",
+      "2026-10-08",
+      "2026-10-09",
+    ]);
+  });
+});
